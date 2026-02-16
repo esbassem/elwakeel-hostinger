@@ -3,10 +3,9 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { FileText, User } from 'lucide-react';
-import { useFinanceTotals } from '@/hooks/useFinanceTotals';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const FinanceAccountCard = ({ contract, onClick }) => {
+const FinanceAccountCard = ({ contract }) => {
   const {
     id,
     financeName,
@@ -18,8 +17,8 @@ const FinanceAccountCard = ({ contract, onClick }) => {
 
   const { totalOverdue, paidCount, totalCount, overdueCount } = metrics || {};
   
-  // Use new hook for totals and calculations
-  const { total, remaining, loading } = useFinanceTotals(id, installments, totalAmount);
+  const total = totalAmount || 0;
+  const remaining = total - (installments || []).reduce((acc, inst) => acc + (inst.total_paid_amount || 0), 0);
 
   return (
     <motion.div
@@ -28,9 +27,7 @@ const FinanceAccountCard = ({ contract, onClick }) => {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
       whileHover={{ y: -4, shadow: "0 10px 30px -10px rgba(0,0,0,0.1)" }}
-      whileTap={{ scale: 0.98 }}
-      className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 cursor-pointer relative overflow-hidden group h-full flex flex-col justify-between transition-all hover:border-indigo-100"
-      onClick={() => onClick && onClick(contract)}
+      className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 relative overflow-hidden group h-full flex flex-col justify-between transition-all hover:border-indigo-100"
     >
       {/* Overdue Status Indicator Line */}
       <div className={cn(
@@ -88,19 +85,15 @@ const FinanceAccountCard = ({ contract, onClick }) => {
              <span className="text-xs font-medium text-slate-500">المطلوب من الإجمالي</span>
              
              <div className="flex items-baseline gap-1.5" dir="rtl">
-               {loading ? (
-                  <Skeleton className="h-5 w-24 bg-slate-200" />
-               ) : (
-                  <>
-                    <span className="text-sm font-bold text-slate-900 font-mono tracking-tight">
-                        {remaining.toLocaleString()}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium px-0.5">من</span>
-                    <span className="text-xs text-slate-600 font-mono font-semibold">
-                        {total.toLocaleString()}
-                    </span>
-                  </>
-               )}
+                <>
+                  <span className="text-sm font-bold text-slate-900 font-mono tracking-tight">
+                      {remaining.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium px-0.5">من</span>
+                  <span className="text-xs text-slate-600 font-mono font-semibold">
+                      {total.toLocaleString()}
+                  </span>
+                </>
              </div>
          </div>
       </div>

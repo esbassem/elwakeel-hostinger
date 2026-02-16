@@ -4,21 +4,13 @@ import { X } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import CollectionInstallmentsList from './CollectionInstallmentsList';
-import FinanceDetailsModal from './FinanceDetailsModal';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { cn } from '@/lib/utils';
 
 const CollectionCustomerModal = ({ customer, open, onOpenChange }) => {
-  const [selectedFinanceId, setSelectedFinanceId] = useState(null);
-  const [isFinanceModalOpen, setIsFinanceModalOpen] = useState(false);
   const { user } = useAuth();
 
   if (!customer) return null;
-
-  const handleFinanceSelect = (financeId) => {
-    setSelectedFinanceId(financeId);
-    setIsFinanceModalOpen(true);
-  };
 
   const renderName = () => {
     const nickname = customer.nickname;
@@ -107,7 +99,6 @@ const CollectionCustomerModal = ({ customer, open, onOpenChange }) => {
             <div className="w-full md:w-[65%] h-full bg-slate-50 p-4 md:p-6 flex flex-col relative overflow-hidden">
                  <CollectionInstallmentsList 
                     customerId={customer.id} 
-                    onFinanceSelect={handleFinanceSelect}
                  />
                  
                  {/* Mobile fade overlay */}
@@ -117,16 +108,6 @@ const CollectionCustomerModal = ({ customer, open, onOpenChange }) => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Finance Details Modal */}
-      {selectedFinanceId && (
-        <FinanceDetailsModal
-          isOpen={isFinanceModalOpen}
-          onClose={() => setIsFinanceModalOpen(false)}
-          financeId={selectedFinanceId}
-          currentUser={user}
-        />
-      )}
     </>
   );
 };

@@ -64,7 +64,7 @@ function App() {
         {!isAuthenticated ? (
           <LoginPage onLogin={handleLogin} />
         ) : (
-          <BrowserRouter>
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
               {/* Main Dashboard - Protected for Admin, Employee, Collection Officer */}
               <Route 

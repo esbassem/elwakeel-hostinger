@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Search, Filter, Users, FileText, ChevronDown, Check } from 'lucide-react';
 import { useCollectionData } from '@/hooks/useCollectionData';
@@ -24,16 +25,14 @@ import { Button } from '@/components/ui/button';
 const CollectionOfficerDashboard = ({ currentUser }) => {
   const { loading, error, customers, contracts, filterData, refreshData } = useCollectionData();
   
-  // Modals state
-  const [modalOpen, setModalOpen] = useState(false);
+  const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  
-  const [financeModalOpen, setFinanceModalOpen] = useState(false);
-  const [selectedFinanceId, setSelectedFinanceId] = useState(null);
 
-  // View state
+  const [financeModalOpen, setFinanceModalOpen] = useState(false);
+  const [selectedFinanceContract, setSelectedFinanceContract] = useState(null);
+  
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState('customers'); // 'customers' | 'finance_accounts'
+  const [viewMode, setViewMode] = useState('customers');
 
   const handleSearch = (e) => {
     const term = e.target.value;
@@ -41,26 +40,20 @@ const CollectionOfficerDashboard = ({ currentUser }) => {
     filterData({ search: term });
   };
 
+  // Simplified handler: The contract object from useCollectionData now has everything.
   const handleItemClick = (item) => {
-    // Determine which modal to open based on the clicked item type
-    if (item.contractId && (viewMode === 'finance_accounts' || item.type === 'contract_card')) {
-      // Open Finance Details directly if clicking a contract card
-      setSelectedFinanceId(item.contractId);
-      setFinanceModalOpen(true);
-    } else {
-      // Open Customer Modal if clicking a customer row or fallback
-      // Find full customer object if we only have partial data
-      const targetId = item.customerId || item.id;
-      const customerObj = customers.find(c => c.id === targetId);
-      
+    if (item.type === 'contract_card' && item.contractId) {
+      const contractObj = contracts.find(c => c.id === item.contractId);
+      if (contractObj) {
+        setSelectedFinanceContract(contractObj); // The object is now complete
+        setFinanceModalOpen(true);
+      }
+    } else if (viewMode === 'customers' && item.id) {
+      // This part remains for the customer-centric view
+      const customerObj = customers.find(c => c.id === item.id);
       if (customerObj) {
         setSelectedCustomer(customerObj);
-        setModalOpen(true);
-      } else if (item.customerId) {
-         // Fallback if customer not found in main list (e.g. filtered out) but we have ID
-         // Ideally we would fetch it, but for now we try to use what we have
-         setSelectedCustomer(item); // Item might be partial
-         setModalOpen(true);
+        setCustomerModalOpen(true);
       }
     }
   };
@@ -73,23 +66,18 @@ const CollectionOfficerDashboard = ({ currentUser }) => {
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
           
-          {/* RIGHT COLUMN: Summary Card */}
           <div className="lg:col-span-1 space-y-3">
             <OverdueAmountsSummary
               viewMode={viewMode}
               customers={customers || []}
               contracts={contracts || []}
             />
-
           </div>
 
-          {/* LEFT COLUMN: Main Content Area */}
           <div className="lg:col-span-2 space-y-3">
              
-             {/* Header Toolbar */}
              <div className="bg-white px-3 py-2 rounded-lg shadow-sm border border-slate-100 flex flex-col sm:flex-row gap-2 items-center sticky top-2 z-20">
                 
-                {/* Title & View Switcher */}
                 <div className="flex items-center gap-2 shrink-0">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -141,7 +129,6 @@ const CollectionOfficerDashboard = ({ currentUser }) => {
 
                 <div className="hidden sm:block w-px h-4 bg-slate-200 mx-1" />
 
-                {/* Search Input */}
                 <div className="relative flex-1 w-full">
                    <div className="absolute right-2 top-0 bottom-0 flex items-center justify-center pointer-events-none z-10">
                       <Search className="w-3.5 h-3.5 text-slate-400" />
@@ -154,7 +141,6 @@ const CollectionOfficerDashboard = ({ currentUser }) => {
                    />
                 </div>
 
-                {/* Filter Dropdown */}
                 <div className="w-full sm:w-[110px]">
                    <Select defaultValue="all">
                       <SelectTrigger className="h-8 bg-slate-50 border-transparent focus:bg-white focus:border-indigo-500 rounded-md text-right text-xs" dir="rtl">
@@ -172,7 +158,6 @@ const CollectionOfficerDashboard = ({ currentUser }) => {
                 </div>
              </div>
 
-             {/* Dynamic Content List */}
              <div className="min-h-[400px]">
                 <CollectionClientsList 
                   customers={customers} 
@@ -187,19 +172,16 @@ const CollectionOfficerDashboard = ({ currentUser }) => {
         </div>
       </div>
 
-      {/* Detail Modal (Customer) */}
       <CollectionCustomerModal 
-        open={modalOpen}
-        onOpenChange={setModalOpen}
+        open={customerModalOpen}
+        onOpenChange={setCustomerModalOpen}
         customer={selectedCustomer}
       />
 
-      {/* Detail Modal (Finance) */}
       <FinanceDetailsModal 
         isOpen={financeModalOpen}
-        onClose={() => setFinanceModalOpen(false)}
-        financeId={selectedFinanceId}
-        currentUser={currentUser}
+        onOpenChange={setFinanceModalOpen}
+        financeContract={selectedFinanceContract}
       />
 
     </div>

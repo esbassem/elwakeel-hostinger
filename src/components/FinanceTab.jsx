@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -19,7 +20,6 @@ import { cn } from '@/lib/utils';
 import FinanceListCard from './FinanceListCard';
 import NewFinanceModal from './NewFinanceModal';
 import PendingApprovalsModal from './PendingApprovalsModal';
-import FinanceDetailsModal from './FinanceDetailsModal';
 import GlobalLayoutWrapper from '@/components/GlobalLayoutWrapper';
 
 const FinanceTab = ({ currentUser }) => {
@@ -39,10 +39,7 @@ const FinanceTab = ({ currentUser }) => {
   // Modal States
   const [showNewFinanceModal, setShowNewFinanceModal] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  
   const [pendingModalFinance, setPendingModalFinance] = useState(null);
-  const [selectedFinanceId, setSelectedFinanceId] = useState(null);
 
   // Hooks
   const { getApprovedFinancesByMonth, loading } = useFinance();
@@ -90,9 +87,7 @@ const FinanceTab = ({ currentUser }) => {
       }
       return;
     }
-    // New Logic: Open Modal instead of Navigation
-    setSelectedFinanceId(finance.id);
-    setShowDetailsModal(true);
+    // Clicks on approved finances do nothing now.
   };
 
   const handlePendingClick = (finance) => {
@@ -294,17 +289,6 @@ const FinanceTab = ({ currentUser }) => {
         />
       )}
 
-      {selectedFinanceId && (
-        <FinanceDetailsModal 
-          isOpen={showDetailsModal}
-          onClose={() => {
-            setShowDetailsModal(false);
-            setSelectedFinanceId(null);
-          }}
-          financeId={selectedFinanceId}
-          currentUser={currentUser}
-        />
-      )}
     </GlobalLayoutWrapper>
   );
 };

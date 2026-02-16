@@ -1,144 +1,108 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, AlertCircle, ChevronLeft, User, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
+import { useFinanceCalculations } from '@/hooks/useFinanceCalculations';
+import { usePaymentDistribution } from '@/hooks/usePaymentDistribution';
 
+/**
+ * FinanceInstallmentCard component - V27 - Swapped Single-Line Notification
+ *
+ * This version swaps the visual position of the elements to match the user's request
+ * for an RTL layout: The notification should be on the right, and the financials on the left.
+ * To do this, the order of elements in the flex container is reversed.
+ */
 const FinanceInstallmentCard = ({ finance, onClick, index = 0 }) => {
+  // --- DATA & CALCULATION HOOKS ---
+  const { calculateTotalInstallmentsAmount } = useFinanceCalculations();
+  const { totalPaid: distributedTotalPaid } = usePaymentDistribution(finance.id, finance.finance_installments);
+
   const metrics = finance.metrics || {};
   const {
     overdueAmount = 0,
-    totalRemaining = 0,
-    nextDueDate,
     paidCount = 0,
+    overdueCountInst = 0,
     totalInstallmentsCount = 0,
-    overdueCountInst = 0
+    oldestOverdueDate, // Key data point for the new requirement
   } = metrics;
 
-  // Format customer name: "Nickname (Name)" or just "Name"
+  // --- DERIVED STATE ---
+  const totalFinanceAmount = calculateTotalInstallmentsAmount(finance.finance_installments || []);
+  const totalPaid = distributedTotalPaid;
+  const numericOverdueAmount = Number(overdueAmount) || 0;
+  
+  const isOverdue = numericOverdueAmount > 0;
+
+  const formattedOldestOverdueDate = oldestOverdueDate
+    ? new Date(oldestOverdueDate).toLocaleDateString('ar-EG', { year: 'numeric', month: '2-digit', day: '2-digit' })
+    : '';
+
   const customerDisplay = finance.customerNickname 
     ? `${finance.customerNickname} (${finance.customerName})`
     : finance.customerName || 'عميل';
 
-  const handleDetailsClick = (e) => {
-    e.stopPropagation();
-    if (onClick) onClick();
-  };
-
+  // --- RENDER ---
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 15 }}
+      initial={{ opacity: 0, y: 5 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.3 }}
+      transition={{ delay: index * 0.05, duration: 0.2 }}
       onClick={onClick}
-      className="group relative bg-white/95 backdrop-blur-sm rounded-xl border border-slate-200/80 shadow-[0_1px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_20px_-8px_rgba(0,0,0,0.1)] hover:border-blue-300/50 transition-all duration-300 cursor-pointer overflow-hidden"
+      className="group w-full bg-white rounded-xl border border-slate-200/80 hover:border-slate-300 transition-all duration-300 cursor-pointer mb-3 shadow-sm hover:shadow-lg overflow-hidden flex flex-col"
     >
-      {/* Decorative top accent */}
-      <div className={cn(
-        "absolute top-0 inset-x-0 h-1 transition-colors duration-300",
-        overdueAmount > 0 ? "bg-red-500/90" : "bg-emerald-500/90"
-      )} />
+      <div className="p-3.5 space-y-2">
 
-      <div className="py-3 px-4 flex flex-col gap-2">
-        
-        {/* Row 1: Header (Finance Name + Customer) & Status */}
+        {/* --- Top Section: Basic Info --- */}
         <div className="flex justify-between items-start">
-            <div className="flex flex-col gap-0.5 max-w-[70%]">
-                <div className="flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-slate-400" />
-                    <h4 className="font-bold text-slate-800 text-sm truncate group-hover:text-blue-700 transition-colors">
-                        {finance.finance_name || finance.financeName || 'عقد تمويل'}
-                    </h4>
-                </div>
-                
-                <div className="flex items-center gap-1 text-[11px] text-slate-500 pr-0.5">
-                    <User className="w-3 h-3 opacity-50" />
-                    <span className="truncate" title={customerDisplay}>
-                        {customerDisplay}
-                    </span>
-                </div>
-            </div>
-
-            {/* Status Badge */}
-            <div className="shrink-0">
-                {overdueAmount > 0 ? (
-                    <div className="flex items-center gap-1 bg-red-50 text-red-600 px-2 py-0.5 rounded-md text-[10px] font-bold border border-red-100/50">
-                        <AlertCircle className="w-3 h-3" />
-                        <span>متأخرات</span>
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-1 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-md text-[10px] font-bold border border-emerald-100/50">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>منتظم</span>
-                    </div>
-                )}
-            </div>
+          <div className="flex-1 min-w-0 pr-4">
+            <p className="font-bold text-slate-800 text-sm truncate group-hover:text-indigo-700 transition-colors" title={finance.finance_name || 'عقد تمويل'}>
+              {finance.finance_name || finance.financeName || 'عقد تمويل'}
+            </p>
+            <p className="text-xs text-slate-500 truncate mt-0.5" title={customerDisplay}>
+              {customerDisplay}
+            </p>
+          </div>
         </div>
 
-        {/* Row 2: Metrics (Horizontal) */}
-        <div className="flex items-center gap-3 bg-slate-50/60 rounded-lg p-2 border border-slate-100/60">
-            <div className="flex flex-col">
-                <span className="text-[10px] text-slate-400 font-medium leading-none mb-1">المتبقي</span>
-                <span className="text-xs font-bold text-slate-700 font-mono tracking-tight">
-                    {totalRemaining.toLocaleString()}
-                </span>
-            </div>
-            
-            {overdueAmount > 0 && (
-                <>
-                <div className="w-px h-5 bg-slate-200/60"></div>
-                <div className="flex flex-col">
-                    <span className="text-[10px] text-red-500/80 font-bold leading-none mb-1">مستحق</span>
-                    <span className="text-xs font-bold text-red-600 font-mono tracking-tight">
-                        {overdueAmount.toLocaleString()}
-                    </span>
-                </div>
-                </>
+        {/* --- Middle Section: Single-Line, Justified Financial Info (RTL ORDER) --- */}
+        <div className="flex justify-between items-baseline gap-4">
+          {/* Right Side (First in code for RTL): Conditional Overdue Info */}
+          <div className="flex-grow min-w-0">
+            {isOverdue && (
+              <p className="text-xs font-semibold text-red-600 animate-pulse text-right truncate">
+                مطلوب تحصيل {numericOverdueAmount.toLocaleString()} د.ل متأخر منذ {formattedOldestOverdueDate}
+              </p>
             )}
+          </div>
+          
+          {/* Left Side (Second in code for RTL): Main Financials */}
+          <p className="font-mono font-bold text-xl text-slate-800 flex-shrink-0">
+              <span className="text-slate-700">{totalFinanceAmount.toLocaleString()}</span>
+              <span className="text-slate-400 mx-1">/</span>
+              <span className="text-green-600">{totalPaid.toLocaleString()}</span>
+          </p>
         </div>
 
-        {/* Row 3: Progress Bar */}
-        <div className="space-y-1.5 pt-1">
-             <div className="flex justify-between items-center text-[10px] text-slate-500 px-0.5">
-                 <div className="flex items-center gap-1">
-                    <span className={cn("font-medium", overdueAmount > 0 ? "text-red-600" : "text-slate-600")}>
-                        {overdueAmount > 0 ? "متأخر منذ:" : "القسط القادم:"}
-                    </span>
-                    <span className="font-mono text-slate-700">
-                        {nextDueDate 
-                            ? new Date(nextDueDate).toLocaleDateString('ar-EG', {month: 'numeric', day: 'numeric'}) 
-                            : '-'}
-                    </span>
-                 </div>
-                 <div className="font-mono opacity-80 text-[9px]">
-                     {paidCount}/{totalInstallmentsCount}
-                 </div>
-             </div>
-
-             {/* Progress Bar (Visual Ticks) */}
-             <div className="flex gap-[1px] h-1.5 w-full bg-slate-100/50 rounded-full overflow-hidden" dir="rtl">
-                  {Array.from({ length: Math.min(totalInstallmentsCount, 40) }).map((_, i) => {
-                      let colorClass = "bg-slate-200/60"; // Future
-                      if (i < paidCount) colorClass = "bg-emerald-500"; // Paid
-                      else if (i < paidCount + overdueCountInst) colorClass = "bg-red-500"; // Overdue
-
-                      return <div key={i} className={cn("flex-1 h-full rounded-[1px]", colorClass)} />;
-                  })}
-             </div>
-        </div>
-
-        {/* Row 4: Action Button (Compact) */}
-        <div className="flex justify-end pt-1">
-            <Button 
-                size="sm" 
-                variant="ghost" 
-                className="h-6 px-2 text-[10px] text-blue-600 hover:text-blue-700 hover:bg-blue-50/80 -mr-2"
-                onClick={handleDetailsClick}
-            >
-                <span>عرض التفاصيل</span>
-                <ChevronLeft className="w-3 h-3 mr-0.5" />
-            </Button>
+        {/* --- Bottom Section: Progress Bar & De-emphasized Count --- */}
+        <div className="flex items-center gap-3 pt-1">
+          <div className="flex-grow">
+            <div className="flex gap-0.5 h-2.5 w-full rounded-full overflow-hidden bg-slate-200/70" dir="rtl">
+              {Array.from({ length: totalInstallmentsCount }).map((_, i) => {
+                let colorClass = "bg-slate-200/70";
+                if (i < paidCount) {
+                  colorClass = "bg-green-500";
+                } else if (i < paidCount + overdueCountInst) {
+                    colorClass = "bg-red-500";
+                }
+                return <div key={i} className={cn("flex-1", colorClass)} />;
+              })}
+            </div>
+          </div>
+          <div className="shrink-0">
+            <p className="text-xs font-mono font-medium text-slate-400">
+              {paidCount} / {totalInstallmentsCount}
+            </p>
+          </div>
         </div>
 
       </div>
