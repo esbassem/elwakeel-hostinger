@@ -1,54 +1,70 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-// NOTE: GuarantorsDisplayTab import has been removed as requested.
+import InstallmentsDisplayTab from './InstallmentsDisplayTab';
+import PaymentsDisplayTab from './PaymentsDisplayTab';
+import useMediaQuery from '../hooks/useMediaQuery';
 
 const FinanceDetailsModal = ({ isOpen, onOpenChange, financeContract }) => {
-    const [activeTab, setActiveTab] = useState('installments');
+    const isDesktop = useMediaQuery('(min-width: 1024px)');
+    const [activeTab, setActiveTab] = useState(isDesktop ? 'installmentsAndPayments' : 'installments');
+
+    useEffect(() => {
+        if (isDesktop && activeTab !== 'installmentsAndPayments' && activeTab !== 'guarantors' && activeTab !== 'details') {
+            setActiveTab('installmentsAndPayments');
+        } else if (!isDesktop && activeTab === 'installmentsAndPayments') {
+            setActiveTab('installments');
+        }
+    }, [isDesktop, activeTab]);
 
     if (!financeContract) return null;
 
-    const {
-        id, 
-        finance_name, 
-        customerName, 
-        customerNickname,
-        metrics
-    } = financeContract;
-
-    const {
-        paidCount = 0, 
-        overdueCountInst = 0, 
-        totalInstallmentsCount = 0,
-        paidAmount = 0, 
-        totalAmount = 0
-    } = metrics || {};
-
+    const { id, finance_name, customerName, customerNickname, metrics } = financeContract;
+    const { paidCount = 0, overdueCountInst = 0, totalInstallmentsCount = 0, paidAmount = 0, totalAmount = 0 } = metrics || {};
     const displayName = customerNickname ? `${customerNickname} (${customerName})` : customerName;
 
-    // As requested: All tab content is now a simple placeholder.
-    const TABS = {
-        installments: { 
-            label: 'الأقساط', 
-            content: <div className="text-center pt-12 text-slate-400">عرض الأقساط معطل حالياً.</div>
-        },
-        guarantors: { 
-            label: 'الضامنون', 
-            content: <div className="text-center pt-12 text-slate-400">عرض الضامنين معطل حالياً.</div>
-        },
-        payments: { 
-            label: 'المدفوعات', 
-            content: <div className="text-center pt-12 text-slate-400">سيتم عرض سجل المدفوعات هنا.</div>
-        },
-        details: { 
-            label: 'التفاصيل', 
-            content: <div className="text-center pt-12 text-slate-400">سيتم عرض تفاصيل العقد هنا.</div>
-        }
-    };
+    const TABS = (() => {
+        const baseTabs = {
+            guarantors: { 
+                label: 'الضامنون', 
+                content: <div className="text-center pt-12 text-slate-400">عرض الضامنين معطل حالياً.</div>
+            },
+            details: { 
+                label: 'التفاصيل', 
+                content: <div className="text-center pt-12 text-slate-400">سيتم عرض تفاصيل العقد هنا.</div>
+            }
+        };
+
+        if (isDesktop) {
+            return {
+                installmentsAndPayments: {
+                    label: 'الأقساط والمدفوعات',
+                    content: (
+                        <div className="grid grid-cols-2 gap-x-4">
+                            <InstallmentsDisplayTab finance_id={id} />
+                            <PaymentsDisplayTab finance_id={id} />
+                        </div>
+                    )
+                },
+                ...baseTabs
+            };
+        } 
+        
+        return {
+            installments: { 
+                label: 'الأقساط', 
+                content: <InstallmentsDisplayTab finance_id={id} />
+            },
+            payments: { 
+                label: 'المدفوعات', 
+                content: <PaymentsDisplayTab finance_id={id} />
+            },
+            ...baseTabs
+        };
+    })();
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -68,13 +84,9 @@ const FinanceDetailsModal = ({ isOpen, onOpenChange, financeContract }) => {
                         <div className="max-w-sm">
                             <div className="flex justify-end mb-1.5">
                                 <div className="flex items-baseline font-bold rtl:space-x-reverse space-x-1.5">
-                                    <span className="text-2xl text-green-600 tracking-tight">
-                                        {(Number(paidAmount) || 0).toLocaleString('en-US', { style: 'currency', currency: 'SAR' })}
-                                    </span>
+                                    <span className="text-2xl text-green-600 tracking-tight">{(Number(paidAmount) || 0).toLocaleString('en-US')}</span>
                                     <span className="text-xl text-slate-400">/</span>
-                                    <span className="text-2xl text-slate-800 tracking-tight">
-                                        {(Number(totalAmount) || 0).toLocaleString('en-US', { style: 'currency', currency: 'SAR' })}
-                                    </span>
+                                    <span className="text-2xl text-slate-800 tracking-tight">{(Number(totalAmount) || 0).toLocaleString('en-US')}</span>
                                 </div>
                             </div>
 
@@ -112,9 +124,9 @@ const FinanceDetailsModal = ({ isOpen, onOpenChange, financeContract }) => {
                     </div>
                 </div>
 
-                <div className="p-6 min-h-[400px]">
+                <div className="p-4 bg-slate-50/50 min-h-[420px]">
                     <div className="flex-1">
-                         {TABS[activeTab].content}
+                         {TABS[activeTab] && TABS[activeTab].content}
                     </div>
                 </div>
             </DialogContent>
