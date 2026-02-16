@@ -90,7 +90,7 @@ const Dashboard = ({ username, onLogout }) => {
         >
           <div>
             <h1 className="text-3xl md:text-4xl font-bold text-white mb-1">خزنة</h1>
-            <p className="text-slate-400">مرحباً، {username}</p>
+            <p className="text-slate-400">مرحبfاً، {username}</p>
           </div>
           <Button
             onClick={onLogout}
