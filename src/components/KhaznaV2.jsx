@@ -7,25 +7,23 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, ArrowUp, ArrowDown, Plus, Minus, FileText, Repeat, ArrowRight, ArrowLeft, Save, Trash2, X, Loader2 } from 'lucide-react';
+import { ChevronRight, ArrowUp, ArrowDown, Plus, Minus, ArrowRight, ArrowLeft, Save, Trash2, X, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import ReviewSheet from './ReviewSheet';
-import TransactionHistorySheet from './TransactionHistorySheet'; // <-- Import the new component
+import TransactionHistorySheet from './TransactionHistorySheet';
 
 const KhaznaV2 = ({ currentUser }) => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // --- Refs for inputs ---
   const amountInputRef = useRef(null);
 
-  // --- UI State ---
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isReviewSheetOpen, setIsReviewSheetOpen] = useState(false);
-  const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false); // <-- State for the new sheet
+  const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
   const [selectedReview, setSelectedReview] = useState([]);
   const [isUpdating, setIsUpdating] = useState(false);
   const [step, setStep] = useState(1);
@@ -34,11 +32,9 @@ const KhaznaV2 = ({ currentUser }) => {
   const [description, setDescription] = useState('');
   const [pendingOperations, setPendingOperations] = useState([]);
   
-  // --- Data State ---
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // --- Currency Formatter ---
   const formatCurrency = (value) => {
     if (typeof value !== 'number' || isNaN(value)) {
       return ''
@@ -46,31 +42,36 @@ const KhaznaV2 = ({ currentUser }) => {
     return value.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP', minimumFractionDigits: 0, maximumFractionDigits: 2 });
   };
 
-  // --- Data Fetching ---
   const fetchData = useCallback(async () => {
-    if (!loading) setLoading(true);
     try {
       const { data, error } = await supabase.from('transactions').select('*').order('date', { ascending: false });
       if (error) throw error;
       setTransactions(data || []);
     } catch (error) {
       toast({ title: "خطأ", description: "لم نتمكن من جلب الحركات المالية.", variant: "destructive" });
-    } finally {
-      setLoading(false);
     }
-  }, [toast, loading]);
+  }, [toast]);
 
   useEffect(() => {
-    fetchData();
+    const loadInitialData = async () => {
+      setLoading(true);
+      await fetchData();
+      setLoading(false);
+    }
+    
+    loadInitialData();
+
     const channel = supabase.channel('khazna-v2-features-multi-approve')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, payload => {
           fetchData();
       })
       .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, []);
 
-  // --- Calculated Values ---
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchData]);
+
   const pendingTransactions = useMemo(() => transactions.filter(t => t.status === 'pending'), [transactions]);
 
   const { balance, pendingAmount, projectedBalance } = useMemo(() => {
@@ -85,15 +86,9 @@ const KhaznaV2 = ({ currentUser }) => {
       return { balance: currentBalance, pendingAmount: pIncomes + pExpenses, projectedBalance: finalProjectedBalance };
   }, [transactions]);
 
-  const groupedTransactions = useMemo(() => {
-    const visibleTransactions = transactions.filter(t => t.status !== 'rejected').slice(0, 15);
-    return visibleTransactions.reduce((acc, t) => {
-        const dateKey = new Date(t.date).toDateString();
-        if (!acc[dateKey]) acc[dateKey] = [];
-        acc[dateKey].push(t);
-        return acc;
-    }, {});
-  }, [transactions]);
+  const visibleTransactions = useMemo(() => 
+    transactions.filter(t => t.status !== 'rejected').slice(0, 15)
+  , [transactions]);
 
   const reviewOperations = useMemo(() => {
     const currentOperation = {
@@ -124,7 +119,6 @@ const KhaznaV2 = ({ currentUser }) => {
     };
   }, [reviewOperations]);
 
-  // --- Actions ---
   const handleUpdateStatus = async (ids, status, successMessage) => {
     setIsUpdating(true);
     try {
@@ -255,16 +249,6 @@ const KhaznaV2 = ({ currentUser }) => {
     return Number(numStr).toLocaleString('en-US');
   };
   
-  const formatDateHeader = (dateKey) => {
-      const date = new Date(dateKey);
-      const today = new Date();
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      if (date.toDateString() === today.toDateString()) return 'اليوم';
-      if (date.toDateString() === yesterday.toDateString()) return 'الأمس';
-      return date.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' });
-  };
-  
   const stepVariants = {
     enter: { opacity: 0 },
     center: { opacity: 1 },
@@ -305,43 +289,41 @@ const KhaznaV2 = ({ currentUser }) => {
             )}
         </div>
 
-        <div className="flex items-center justify-center gap-x-2 sm:gap-x-4 mb-10">
-            <ActionButton icon={FileText} text="سجل الخزنة" onClick={() => setIsHistorySheetOpen(true)} />
-            <ActionButton icon={Repeat} text="جرد ومراجعة" onClick={() => toast({title: 'قيد التطوير'})} />
-        </div>
-        
-        <div>
-          {loading ? <div className="text-center py-10 flex justify-center"><Loader2 className="w-8 h-8 text-slate-400 animate-spin"/></div> : 
-            Object.keys(groupedTransactions).length > 0 ? (
-              <div className="space-y-4">
-                {Object.entries(groupedTransactions).map(([dateKey, transactionsOnDate]) => (
-                   <div key={dateKey}>
-                    <h4 className="font-semibold text-sm text-slate-600 mb-2 px-1">{formatDateHeader(dateKey)}</h4>
-                    <div className="bg-white/80 rounded-xl border border-slate-200/50 divide-y divide-slate-200/70 shadow-sm">
-                      {transactionsOnDate.map(t => (
-                          <div key={t.id} className="flex items-center gap-4 p-3.5">
-                             <div className={cn('flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg', t.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600')}>
-                                  {t.type === 'income' ? <ArrowUp className="w-4 h-4"/> : <ArrowDown className="w-4 h-4"/>}
-                              </div>
-                              <div className="flex-1">
-                                  <p className="font-medium text-slate-800 text-sm text-right" dir="rtl">{t.note}</p>
-                                  <p className="text-xs text-slate-500 mt-0.5">{t.created_by}</p>
-                              </div>
-                              <div className={cn("font-bold text-sm text-left font-mono", t.type === 'income' ? 'text-green-600' : 'text-red-500')}>
-                                  {t.status !== 'approved' && <span className="text-xs text-amber-500 font-sans mr-1">(معلق)</span>}
-                                  {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
-                              </div>
-                          </div>
-                      ))}
+        <div className="mb-10 bg-white/80 rounded-xl border border-slate-200/50 shadow-sm">
+            <div className="flex justify-between items-center p-3.5 border-b border-slate-200/70">
+                <h3 className="text-base font-bold text-slate-800">آخر العمليات</h3>
+                <Button variant="ghost" className="text-sm text-blue-600 h-auto py-1 px-2" onClick={() => setIsHistorySheetOpen(true)}>
+                    جميع العمليات
+                </Button>
+            </div>
+
+            {loading ? (
+                <div className="text-center py-10 flex justify-center">
+                    <Loader2 className="w-8 h-8 text-slate-400 animate-spin"/>
+                </div>
+            ) : visibleTransactions.length > 0 ? (
+                <div className="divide-y divide-slate-200/70">
+                {visibleTransactions.map(t => (
+                    <div key={t.id} className="flex items-center gap-4 p-3.5">
+                        <div className={cn('flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg', t.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600')}>
+                            {t.type === 'income' ? <ArrowUp className="w-4 h-4"/> : <ArrowDown className="w-4 h-4"/>}
+                        </div>
+                        <div className="flex-1">
+                            <p className="font-medium text-slate-800 text-sm text-right" dir="rtl">{t.note}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{t.created_by}</p>
+                        </div>
+                        <div className={cn("font-bold text-sm text-left font-mono", t.type === 'income' ? 'text-green-600' : 'text-red-500')}>
+                            {t.status !== 'approved' && <span className="text-xs text-amber-500 font-sans mr-1">(معلق)</span>}
+                            {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
+                        </div>
                     </div>
-                  </div>
                 ))}
-              </div>
+                </div>
             ) : (
-              <div className="text-center py-16 rounded-lg bg-white/70 border border-dashed border-slate-300">
-                  <p className="font-medium text-slate-500">لا توجد حركات لعرضها</p>
-                  <p className="text-sm text-slate-400 mt-1">ابدأ بإضافة أول حركة مالية</p>
-              </div>
+                <div className="text-center py-16">
+                    <p className="font-medium text-slate-500">لا توجد حركات لعرضها</p>
+                    <p className="text-sm text-slate-400 mt-1">ابدأ بإضافة أول حركة مالية</p>
+                </div>
             )}
         </div>
       </main>
@@ -505,14 +487,5 @@ const KhaznaV2 = ({ currentUser }) => {
     </div>
   );
 };
-
-const ActionButton = ({ icon: Icon, text, onClick }) => (
-    <Button variant="ghost" className="flex-col h-auto px-2 py-3 sm:px-4" onClick={onClick}>
-        <div className="w-10 h-10 flex items-center justify-center bg-white text-slate-600 rounded-full mb-1 border border-slate-200/80 shadow-sm">
-            <Icon className="w-5 h-5" />
-        </div>
-        <span className="text-xs font-semibold text-slate-600">{text}</span>
-    </Button>
-);
 
 export default KhaznaV2;

@@ -11,7 +11,6 @@ import {
   Banknote,
   Gavel
 } from 'lucide-react';
-import KhaznaTool from '@/components/KhaznaTool';
 import TeamManagement from '@/components/TeamManagement';
 import FinanceTab from '@/components/FinanceTab';
 import CollectionOfficerDashboard from '@/components/CollectionOfficerDashboard';
@@ -38,7 +37,7 @@ const MainDashboard = ({ user, onLogout }) => {
       return;
     }
 
-    if (toolId === 'khazna_v2') {
+    if (toolId === 'khazna') {
       navigate('/khazna-v2');
     } else {
       setActiveTool(toolId);
@@ -56,7 +55,6 @@ const MainDashboard = ({ user, onLogout }) => {
 
   const mainTools = [
     { id: 'khazna', title: "الخزنة", description: "إدارة النقدية والمصروفات", icon: Wallet, available: true, hidden: isCustomerAccountant },
-    { id: 'khazna_v2', title: "الخزنة الجديدة", description: "الذهاب إلى الإصدار الجديد من الخزنة", icon: Wallet, available: true, hidden: isCustomerAccountant },
     { id: 'finances', title: "التمويلات", description: "إدارة القروض والأقساط", icon: Banknote, available: true, hidden: isCustomerAccountant },
     { id: 'collection', title: "التحصيل", description: "متابعة المتأخرات والديون", icon: Gavel, available: true, hidden: !isCollectionOfficer },
     { id: 'invoices', title: "الفواتير", description: "إنشاء وإدارة الفواتير", icon: FileText, available: false, hidden: isCustomerAccountant },
@@ -78,7 +76,6 @@ const MainDashboard = ({ user, onLogout }) => {
   if (activeTool) {
     const toolData = getToolData(activeTool);
     const toolMap = {
-      khazna: <KhaznaTool currentUser={user} />,
       finances: <FinanceTab currentUser={user} />,
       collection: <CollectionOfficerDashboard />,
       team: <TeamManagement currentUser={user} />,
