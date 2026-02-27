@@ -19,7 +19,6 @@ const CollectionInstallmentsList = ({ customerId, onFinanceSelect }) => {
     setError(null);
     
     try {
-      // Fetch contracts - Added status='approved' filter
       const { data, error: fetchError } = await supabase
         .from('finance_contracts')
         .select(`
@@ -33,7 +32,6 @@ const CollectionInstallmentsList = ({ customerId, onFinanceSelect }) => {
 
       if (fetchError) throw fetchError;
 
-      // Process and enrich data using the new metrics utility
       const enrichedData = data.map(finance => {
         const metrics = calculateFinanceMetrics(finance);
         return {
@@ -96,7 +94,7 @@ const CollectionInstallmentsList = ({ customerId, onFinanceSelect }) => {
             key={finance.id}
             finance={finance}
             index={index}
-            onClick={() => onFinanceSelect && onFinanceSelect(finance.id)}
+            onClick={() => onFinanceSelect && onFinanceSelect(finance)}
           />
         ))}
       </div>

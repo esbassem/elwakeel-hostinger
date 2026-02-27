@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Shield, ShieldAlert, Plus, User, Phone, Briefcase, MapPin, Trash2, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';

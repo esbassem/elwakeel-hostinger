@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
@@ -7,6 +6,8 @@ import MainDashboard from '@/components/MainDashboard';
 import AccountPage from '@/components/AccountPage';
 import FinanceDetailsPage from '@/components/FinanceDetailsPage';
 import CustomerAccountsPage from '@/components/CustomerAccountsPage';
+import NewFinancePage from '@/pages/NewFinancePage';
+import KhaznaV2 from '@/components/KhaznaV2';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/contexts/SupabaseAuthContext';
@@ -17,7 +18,6 @@ function App() {
   const [loadingAuth, setLoadingAuth] = useState(true);
 
   useEffect(() => {
-    // Check for active session
     const savedAuth = localStorage.getItem('trader_tools_auth');
     if (savedAuth) {
       try {
@@ -32,7 +32,6 @@ function App() {
   }, []);
 
   const handleLogin = (user) => {
-    // Save session with full user details
     const sessionData = { 
       username: user.username, 
       name: user.name, 
@@ -60,19 +59,19 @@ function App() {
         <meta name="description" content="منصة أدوات التاجر لإدارة النقدية والفواتير والمخزون بسهولة ويسر" />
       </Helmet>
       
-      <div className="min-h-screen bg-stone-50 font-cairo text-stone-800" dir="rtl">
+      {/* The font-cairo class is removed, the font is now globally set in index.css */}
+      <div className="min-h-screen bg-stone-50 text-stone-800" dir="rtl">
         {!isAuthenticated ? (
           <LoginPage onLogin={handleLogin} />
         ) : (
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
-              {/* Main Dashboard - Protected for Admin, Employee, Collection Officer */}
               <Route 
-                path="/" 
+                path="/"
                 element={
                   <ProtectedRoute 
                     user={currentUser} 
-                    allowedRoles={['admin', 'employee', 'collection_officer']}
+                    allowedRoles={['admin', 'collection_officer', 'employee']}
                   >
                     <MainDashboard user={currentUser} onLogout={handleLogout} />
                   </ProtectedRoute>
@@ -84,20 +83,19 @@ function App() {
                 element={
                   <ProtectedRoute 
                     user={currentUser} 
-                    allowedRoles={['admin', 'employee', 'collection_officer']}
+                    allowedRoles={['admin', 'collection_officer', 'employee']}
                   >
                     <MainDashboard user={currentUser} onLogout={handleLogout} />
                   </ProtectedRoute>
                 } 
               />
               
-              {/* Account Details - Protected */}
               <Route 
                 path="/account/:id" 
                 element={
                    <ProtectedRoute 
                     user={currentUser} 
-                    allowedRoles={['admin', 'employee', 'collection_officer']}
+                    allowedRoles={['admin', 'collection_officer']}
                    >
                      <AccountPage currentUser={currentUser} />
                    </ProtectedRoute>
@@ -109,22 +107,45 @@ function App() {
                 element={
                   <ProtectedRoute 
                     user={currentUser} 
-                    allowedRoles={['admin', 'employee', 'collection_officer', 'customer_accountant']}
+                    allowedRoles={['admin', 'collection_officer', 'customer_accountant']}
                   >
                     <FinanceDetailsPage currentUser={currentUser} />
                   </ProtectedRoute>
                 } 
               />
+
+              <Route 
+                path="/new-finance" 
+                element={
+                  <ProtectedRoute 
+                    user={currentUser} 
+                    allowedRoles={['admin', 'collection_officer']}
+                  >
+                    <NewFinancePage currentUser={currentUser} />
+                  </ProtectedRoute>
+                } 
+              />
               
-              {/* Dedicated Customer Accountant Route */}
               <Route 
                 path="/customer-accounts" 
                 element={
                   <ProtectedRoute 
                     user={currentUser} 
-                    allowedRoles={['customer_accountant', 'admin']} // Admin can also view for debugging
+                    allowedRoles={['customer_accountant', 'admin']}
                   >
                     <CustomerAccountsPage currentUser={currentUser} onLogout={handleLogout} />
+                  </ProtectedRoute>
+                } 
+              />
+
+              <Route 
+                path="/khazna-v2" 
+                element={
+                  <ProtectedRoute 
+                    user={currentUser} 
+                    allowedRoles={['admin', 'employee']}
+                  >
+                    <KhaznaV2 currentUser={currentUser} />
                   </ProtectedRoute>
                 } 
               />

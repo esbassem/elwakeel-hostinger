@@ -7,7 +7,7 @@ import CollectionInstallmentsList from './CollectionInstallmentsList';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { cn } from '@/lib/utils';
 
-const CollectionCustomerModal = ({ customer, open, onOpenChange }) => {
+const CollectionCustomerModal = ({ customer, open, onOpenChange, onFinanceAccountSelect }) => {
   const { user } = useAuth();
 
   if (!customer) return null;
@@ -36,10 +36,8 @@ const CollectionCustomerModal = ({ customer, open, onOpenChange }) => {
         >
           <div className="flex flex-col md:flex-row h-full w-full shadow-2xl bg-white">
             
-            {/* Right Section: Customer Info (Red Background) */}
             <div className="w-full md:w-[35%] h-auto md:h-full bg-[#901B36] text-white relative flex flex-col items-center text-center z-10 shrink-0 shadow-lg">
               
-              {/* Close Button - Absolute */}
               <div className="absolute top-4 left-4 z-20">
                 <Button 
                   variant="ghost" 
@@ -51,14 +49,10 @@ const CollectionCustomerModal = ({ customer, open, onOpenChange }) => {
                 </Button>
               </div>
 
-              {/* Centered Content Container */}
               <div className="flex flex-col items-center justify-center w-full h-full px-6 py-4 space-y-6">
                 
-                {/* Spacer to push content to center visually */}
                 <div className="flex-1 flex flex-col items-center justify-center w-full space-y-4">
-                  {/* Avatar/Initial (Optional) - skipped to keep clean as per previous design, just text */}
                   
-                  {/* Name & Details */}
                   <div className="space-y-2 w-full flex flex-col items-center">
                     <h2 className="text-xl md:text-2xl font-bold tracking-tight text-center leading-tight">
                       {renderName()}
@@ -75,7 +69,6 @@ const CollectionCustomerModal = ({ customer, open, onOpenChange }) => {
                   </div>
                 </div>
 
-                {/* Amount Section - Bottom Anchored or Flexed */}
                 <div className="w-full pt-6 border-t border-white/10 pb-2">
                   <div className="space-y-1 md:space-y-2 flex flex-col items-center">
                     <p className="text-white/70 text-xs font-bold uppercase tracking-widest">
@@ -95,13 +88,12 @@ const CollectionCustomerModal = ({ customer, open, onOpenChange }) => {
               </div>
             </div>
 
-            {/* Left Section: Installments List (White Background) */}
             <div className="w-full md:w-[65%] h-full bg-slate-50 p-4 md:p-6 flex flex-col relative overflow-hidden">
                  <CollectionInstallmentsList 
                     customerId={customer.id} 
+                    onFinanceSelect={onFinanceAccountSelect}
                  />
                  
-                 {/* Mobile fade overlay */}
                  <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none md:hidden" />
             </div>
 

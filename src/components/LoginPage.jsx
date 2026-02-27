@@ -16,14 +16,11 @@ const LoginPage = ({ onLogin }) => {
     setIsLoading(true);
     
     try {
-      // Query Supabase for the user
-      // Note: In a real production app, passwords should be hashed and we should use Supabase Auth.
-      // For this specific custom table implementation as requested:
       const { data, error } = await supabase
         .from('app_users')
         .select('*')
         .eq('username', username)
-        .eq('password', password) // Comparing plain text as requested for the custom table
+        .eq('password', password)
         .maybeSingle();
 
       if (error) throw error;

@@ -1,21 +1,22 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutList, Shield, FileCheck, Banknote, MessageSquare } from 'lucide-react';
+import { LayoutList, Shield, FileCheck, Banknote, MessageSquare, Receipt } from 'lucide-react';
 import InstallmentsTabContent from './InstallmentsTabContent';
 import GuaranteesTabContent from './GuaranteesTabContent';
 import ReceiptGuaranteesTabContent from './ReceiptGuaranteesTabContent';
 import DisbursementTabContent from './DisbursementTabContent';
 import NotesTabContent from './NotesTabContent';
+import PaymentHistoryTab from './PaymentHistoryTab';
 
-const InstallmentTabs = ({ finance, currentUser }) => {
+const InstallmentTabs = ({ finance, currentUser, onRefresh }) => {
   const [activeTab, setActiveTab] = useState('installments');
 
   const tabs = [
     { id: 'installments', label: 'الأقساط', icon: LayoutList },
+    { id: 'payments', label: 'سجل المدفوعات', icon: Receipt },
     { id: 'guarantees', label: 'الضامن', icon: Shield },
     { id: 'documents', label: 'إيصالات الأمانة', icon: FileCheck },
     { id: 'disbursement', label: 'صرف التمويل', icon: Banknote },
-    // "Notes" tab is conditionally rendered in the UI
     { id: 'notes', label: 'الملاحظات', icon: MessageSquare, isMobileOnly: true },
   ];
 
@@ -25,7 +26,6 @@ const InstallmentTabs = ({ finance, currentUser }) => {
       <div className="border-b border-slate-100 bg-slate-50/50 px-2 sm:px-6 pt-4">
         <div className="flex gap-2 sm:gap-6 overflow-x-auto no-scrollbar pb-0">
           {tabs.map((tab) => {
-             // Logic: If it's a mobile-only tab, hide it on desktop (md:hidden)
              const hiddenClass = tab.isMobileOnly ? 'md:hidden' : '';
              const Icon = tab.icon;
              const isActive = activeTab === tab.id;
@@ -66,6 +66,7 @@ const InstallmentTabs = ({ finance, currentUser }) => {
             className="h-full"
           >
             {activeTab === 'installments' && <InstallmentsTabContent installments={finance.finance_installments} />}
+            {activeTab === 'payments' && <PaymentHistoryTab financeId={finance.id} currentUser={currentUser} onRefresh={onRefresh} />}
             {activeTab === 'guarantees' && <GuaranteesTabContent />}
             {activeTab === 'documents' && <ReceiptGuaranteesTabContent finance={finance} />}
             {activeTab === 'disbursement' && <DisbursementTabContent finance={finance} />}

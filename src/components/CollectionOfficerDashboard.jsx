@@ -40,22 +40,26 @@ const CollectionOfficerDashboard = ({ currentUser }) => {
     filterData({ search: term });
   };
 
-  // Simplified handler: The contract object from useCollectionData now has everything.
   const handleItemClick = (item) => {
     if (item.type === 'contract_card' && item.contractId) {
       const contractObj = contracts.find(c => c.id === item.contractId);
       if (contractObj) {
-        setSelectedFinanceContract(contractObj); // The object is now complete
+        setSelectedFinanceContract(contractObj);
         setFinanceModalOpen(true);
       }
     } else if (viewMode === 'customers' && item.id) {
-      // This part remains for the customer-centric view
       const customerObj = customers.find(c => c.id === item.id);
       if (customerObj) {
         setSelectedCustomer(customerObj);
         setCustomerModalOpen(true);
       }
     }
+  };
+
+  const handleFinanceAccountSelect = (contract) => {
+    setSelectedFinanceContract(contract);
+    setCustomerModalOpen(false); // Close customer modal
+    setFinanceModalOpen(true);   // Open finance details modal
   };
 
   const currentCount = viewMode === 'customers' ? (customers?.length || 0) : (contracts?.length || 0);
@@ -176,6 +180,7 @@ const CollectionOfficerDashboard = ({ currentUser }) => {
         open={customerModalOpen}
         onOpenChange={setCustomerModalOpen}
         customer={selectedCustomer}
+        onFinanceAccountSelect={handleFinanceAccountSelect}
       />
 
       <FinanceDetailsModal 

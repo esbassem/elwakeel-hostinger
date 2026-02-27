@@ -1,6 +1,4 @@
-
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { 
   RefreshCw, 
   Wallet,
@@ -18,30 +16,29 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 import FinanceListCard from './FinanceListCard';
-import NewFinanceModal from './NewFinanceModal';
 import PendingApprovalsModal from './PendingApprovalsModal';
 import GlobalLayoutWrapper from '@/components/GlobalLayoutWrapper';
+import {
+  Sheet,
+  SheetContent,
+} from '@/components/ui/sheet';
+import NewFinancePage from '@/pages/NewFinancePage';
+import FinanceDetailsPage from '@/pages/FinanceDetailsPage';
 
 const FinanceTab = ({ currentUser }) => {
-  const navigate = useNavigate();
   const { toast } = useToast();
   
-  // Data State
   const [groupedFinances, setGroupedFinances] = useState({});
   const [sortedMonthKeys, setSortedMonthKeys] = useState([]);
   const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
-  
   const [pendingFinances, setPendingFinances] = useState([]);
-  
-  // UI State
   const [isRefreshed, setIsRefreshed] = useState(false);
-  
-  // Modal States
-  const [showNewFinanceModal, setShowNewFinanceModal] = useState(false);
+  const [isDetailsSheetOpen, setIsDetailsSheetOpen] = useState(false);
+  const [selectedFinance, setSelectedFinance] = useState(null);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [pendingModalFinance, setPendingModalFinance] = useState(null);
+  const [isNewFinanceSheetOpen, setIsNewFinanceSheetOpen] = useState(false);
 
-  // Hooks
   const { getApprovedFinancesByMonth, loading } = useFinance();
   const { 
     fetchPendingApprovals, 
@@ -51,7 +48,6 @@ const FinanceTab = ({ currentUser }) => {
 
   const isAdmin = currentUser?.role === 'admin';
 
-  // Fetch Data
   const fetchData = async () => {
     setIsRefreshed(true);
     const { data: pending } = await fetchPendingApprovals();
@@ -72,7 +68,6 @@ const FinanceTab = ({ currentUser }) => {
     fetchData();
   }, []);
 
-  // Handlers
   const handleFinanceClick = (finance) => {
     if (finance.status === 'pending') {
       if (isAdmin) {
@@ -87,7 +82,8 @@ const FinanceTab = ({ currentUser }) => {
       }
       return;
     }
-    // Clicks on approved finances do nothing now.
+    setSelectedFinance(finance);
+    setIsDetailsSheetOpen(true);
   };
 
   const handlePendingClick = (finance) => {
@@ -126,7 +122,6 @@ const FinanceTab = ({ currentUser }) => {
     }
   };
 
-  // Month Navigation
   const handlePrevMonth = () => {
     if (currentMonthIndex < sortedMonthKeys.length - 1) {
       setCurrentMonthIndex(prev => prev + 1);
@@ -138,22 +133,29 @@ const FinanceTab = ({ currentUser }) => {
       setCurrentMonthIndex(prev => prev - 1);
     }
   };
+  
+  const handleNewFinanceClick = () => {
+    setIsNewFinanceSheetOpen(true);
+  };
+  
+  const handleDetailsSheetChange = (isOpen) => {
+    setIsDetailsSheetOpen(isOpen);
+    if (!isOpen) {
+        setSelectedFinance(null);
+    }
+  }
 
   const currentMonthKey = sortedMonthKeys[currentMonthIndex];
   const currentMonthData = currentMonthKey ? groupedFinances[currentMonthKey] : null;
 
   return (
     <GlobalLayoutWrapper className="font-cairo text-slate-800" dir="rtl">
-        {/* Main Layout Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start w-full">
           
-          {/* Sidebar / Info Column */}
           <div className="lg:col-span-4 xl:col-span-3 space-y-4 lg:sticky lg:top-6 order-1">
              
-             {/* Main Action Card */}
              <div className="bg-gradient-to-br from-blue-700 to-indigo-700 p-4 md:p-5 rounded-2xl shadow-lg shadow-blue-900/10 text-white relative overflow-hidden group">
                 
-                {/* Decorative Elements */}
                 <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
                 <div className="absolute bottom-0 left-0 w-20 h-20 bg-indigo-500/30 rounded-full blur-xl pointer-events-none"></div>
 
@@ -180,7 +182,7 @@ const FinanceTab = ({ currentUser }) => {
                   </p>
 
                   <Button 
-                    onClick={() => setShowNewFinanceModal(true)}
+                    onClick={handleNewFinanceClick}
                     className="w-full bg-white text-blue-700 hover:bg-blue-50 hover:text-blue-800 font-bold h-10 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm"
                   >
                     <Plus className="w-4 h-4" />
@@ -189,7 +191,6 @@ const FinanceTab = ({ currentUser }) => {
                 </div>
              </div>
 
-             {/* Pending Approvals Widget */}
              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-50 flex items-center justify-between bg-amber-50/30">
                   <div className="flex items-center gap-2">
@@ -249,7 +250,6 @@ const FinanceTab = ({ currentUser }) => {
              </div>
           </div>
 
-          {/* Main Content Column */}
           <div className="lg:col-span-8 xl:col-span-9 order-2 min-w-0 h-full">
              <FinanceListCard 
                 currentMonthData={currentMonthData}
@@ -264,30 +264,27 @@ const FinanceTab = ({ currentUser }) => {
 
         </div>
 
-      {/* Modals */}
-      <NewFinanceModal 
-        isOpen={showNewFinanceModal}
-        onClose={() => setShowNewFinanceModal(false)}
-        onSuccess={() => {
-          setShowNewFinanceModal(false);
-          fetchData();
-        }}
-        initialData={{ amount: '' }}
-        currentUser={currentUser}
-      />
+        <Sheet open={isNewFinanceSheetOpen} onOpenChange={setIsNewFinanceSheetOpen}>
+          <SheetContent side="left" className="w-full lg:w-2/3 p-0">
+            <NewFinancePage isSheet={true} currentUser={currentUser} />
+          </SheetContent>
+        </Sheet>
 
-      {pendingModalFinance && (
-        <PendingApprovalsModal 
-          isOpen={showApprovalModal}
-          onClose={() => {
-            setShowApprovalModal(false);
-            setPendingModalFinance(null);
-          }}
-          financeId={pendingModalFinance.id}
-          onApprove={onApproveFinance}
-          onReject={onRejectFinance}
-        />
-      )}
+        <Sheet open={isDetailsSheetOpen} onOpenChange={handleDetailsSheetChange}>
+            <SheetContent side="right" className="w-full lg:w-3/4 p-0">
+                {selectedFinance && <FinanceDetailsPage financeContract={selectedFinance} />}
+            </SheetContent>
+        </Sheet>
+
+        {pendingModalFinance && (
+          <PendingApprovalsModal 
+            isOpen={showApprovalModal}
+            onClose={() => {setShowApprovalModal(false); setPendingModalFinance(null);}}
+            financeId={pendingModalFinance.id}
+            onApprove={onApproveFinance}
+            onReject={onRejectFinance}
+          />
+        )}
 
     </GlobalLayoutWrapper>
   );

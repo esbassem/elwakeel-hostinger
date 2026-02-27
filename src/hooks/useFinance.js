@@ -1,12 +1,10 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
-import { useFinanceCalculations } from '@/hooks/useFinanceCalculations';
 
 export const useFinance = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { calculateTotalPaid, calculateRemaining } = useFinanceCalculations();
 
   const getFinances = useCallback(async (filters = {}) => {
     setLoading(true);
@@ -15,12 +13,8 @@ export const useFinance = () => {
         .from('finance_contracts')
         .select(`
           *,
-          accounts:beneficiary_account_id (name, nickname),
-          finance_installments (
-            installment_amount,
-            total_paid_amount,
-            status
-          )
+          accounts:beneficiary_account_id (*),
+          finance_installments (*)
         `)
         .order('created_at', { ascending: false });
 
@@ -60,12 +54,9 @@ export const useFinance = () => {
         .from('finance_contracts')
         .select(`
           *,
-          accounts:beneficiary_account_id (name, nickname),
-          finance_installments (
-            installment_amount,
-            total_paid_amount,
-            status
-          )
+          accounts:beneficiary_account_id (*),
+          finance_installments (*),
+          finance_installment_payments (*)
         `)
         .in('status', ['approved', 'completed'])
         .order('finance_date', { ascending: false });
@@ -87,23 +78,66 @@ export const useFinance = () => {
             monthKey,
             monthName,
             finances: [],
-            stats: {
-              totalAmount: 0,
-              totalPaid: 0,
-              remaining: 0,
-              count: 0
-            }
+            stats: { total: 0, count: 0 }
           };
         }
 
-        const financeAmount = Number(finance.finance_amount) || 0;
-        const paid = calculateTotalPaid(finance.finance_installments);
-        const remaining = calculateRemaining(finance.finance_installments);
+        const installments = finance.finance_installments || [];
+        const payments = finance.finance_installment_payments || [];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-        acc[monthKey].finances.push(finance);
-        acc[monthKey].stats.totalAmount += financeAmount;
-        acc[monthKey].stats.totalPaid += paid;
-        acc[monthKey].stats.remaining += remaining;
+        const totalPaid = payments.reduce((sum, p) => sum + (Number(p.paid_amount) || 0), 0);
+        const totalAmount = finance.finance_amount;
+
+        const expectedPaid = installments.reduce((sum, inst) => {
+          const d = new Date(inst.installment_date);
+          d.setHours(0, 0, 0, 0);
+          if (d <= today) {
+            return sum + (Number(inst.installment_amount) || 0);
+          }
+          return sum;
+        }, 0);
+
+        const overdueAmount = Math.max(0, expectedPaid - totalPaid);
+        const totalRemaining = Math.max(0, totalAmount - totalPaid);
+        const sortedInstallments = [...installments].sort((a, b) => new Date(a.installment_date) - new Date(b.installment_date));
+
+        let remainingCash = totalPaid;
+        let paidCount = 0;
+        let overdueCountInst = 0;
+        let firstUnpaidIndex = -1;
+
+        sortedInstallments.forEach((inst, index) => {
+            const amount = Number(inst.installment_amount) || 0;
+            const paidForThis = Math.min(remainingCash, amount);
+            remainingCash = Math.max(0, remainingCash - paidForThis);
+            const isFullyPaid = (amount - paidForThis) < 1.0;
+            if (isFullyPaid) {
+                paidCount++;
+            } else {
+                if (firstUnpaidIndex === -1) firstUnpaidIndex = index;
+                const d = new Date(inst.installment_date);
+                d.setHours(0, 0, 0, 0);
+                if (d <= today) {
+                    overdueCountInst++;
+                }
+            }
+        });
+
+        const metrics = {
+            totalAmount, totalPaid, expectedPaid, overdueAmount, totalRemaining, paidCount,
+            overdueCountInst, totalInstallmentsCount: sortedInstallments.length,
+        };
+
+        const financeWithMetrics = {
+            ...finance,
+            metrics,
+            installments: sortedInstallments,
+        };
+
+        acc[monthKey].finances.push(financeWithMetrics);
+        acc[monthKey].stats.total += totalAmount;
         acc[monthKey].stats.count += 1;
 
         return acc;
@@ -117,7 +151,7 @@ export const useFinance = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast, calculateTotalPaid, calculateRemaining]);
+  }, [toast]);
 
   const getFinanceById = useCallback(async (id) => {
     setLoading(true);
@@ -126,7 +160,7 @@ export const useFinance = () => {
         .from('finance_contracts')
         .select(`
           *,
-          accounts:beneficiary_account_id (name, nickname, phone1, phone2, address, job, id_card_front, id_card_back, id_card_image, national_id),
+          accounts:beneficiary_account_id (*),
           finance_installments (*)
         `)
         .eq('id', id)
@@ -203,7 +237,7 @@ export const useFinance = () => {
           created_at: new Date().toISOString(),
           status: 'pending'
         }])
-        .select()
+        .select('*, accounts:beneficiary_account_id(*)')
         .single();
 
       if (contractError) throw contractError;
