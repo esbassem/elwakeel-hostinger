@@ -14,7 +14,7 @@ export const useFinanceApprovals = () => {
         .from('finance_contracts')
         .select(`
           *,
-          accounts:beneficiary_account_id (name, nickname, phone1),
+          partners!beneficiary_partner_id(*),
           finance_installments (installment_amount)
         `)
         .eq('status', 'pending')

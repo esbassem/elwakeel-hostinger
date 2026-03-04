@@ -222,7 +222,7 @@ const FinanceTab = ({ currentUser }) => {
                         >
                           <div className="flex justify-between items-start mb-1">
                              <h4 className="font-bold text-xs text-slate-800 line-clamp-1 group-hover:text-amber-700 transition-colors">
-                               {finance.accounts?.name}
+                               {finance.partners ? `${finance.partners.name} ${finance.partners.nickname ? `(${finance.partners.nickname})` : ''}` : ''}
                              </h4>
                              <ArrowUpRight className="w-3 h-3 text-slate-300 group-hover:text-amber-500 transition-colors" />
                           </div>

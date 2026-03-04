@@ -13,7 +13,7 @@ export const useFinance = () => {
         .from('finance_contracts')
         .select(`
           *,
-          accounts:beneficiary_account_id (*),
+          partners!beneficiary_partner_id (*),
           finance_installments (*)
         `)
         .order('created_at', { ascending: false });
@@ -54,7 +54,7 @@ export const useFinance = () => {
         .from('finance_contracts')
         .select(`
           *,
-          accounts:beneficiary_account_id (*),
+          partners!beneficiary_partner_id (*),
           finance_installments (*),
           finance_installment_payments (*)
         `)
@@ -160,7 +160,7 @@ export const useFinance = () => {
         .from('finance_contracts')
         .select(`
           *,
-          accounts:beneficiary_account_id (*),
+          partners!beneficiary_partner_id (*),
           finance_installments (*)
         `)
         .eq('id', id)
@@ -237,7 +237,7 @@ export const useFinance = () => {
           created_at: new Date().toISOString(),
           status: 'pending'
         }])
-        .select('*, accounts:beneficiary_account_id(*)')
+        .select('*, partners!beneficiary_partner_id(*)')
         .single();
 
       if (contractError) throw contractError;
@@ -259,17 +259,17 @@ export const useFinance = () => {
         if (installmentsError) throw installmentsError;
       }
 
-      // 3. Insert Guarantors (linked to accounts)
+      // 3. Insert Guarantors (linked to partners)
       if (guarantorsData?.length > 0) {
         const guaranteesWithId = guarantorsData.map(g => ({
           finance_contract_id: financeId,
           guarantee_type: 'personal',
           status: 'active',
-          guarantor_account_id: g.guarantor_account_id,
+          guarantor_partner_id: g.guarantor_partner_id,
           relationship: g.relationship,
           note: g.note,
           created_at: new Date().toISOString()
-        })).filter(g => g.guarantor_account_id); // Ensure we only add if account is selected
+        })).filter(g => g.guarantor_partner_id); // Ensure we only add if partner is selected
 
         if (guaranteesWithId.length > 0) {
           const { error: guarantorError } = await supabase
@@ -291,7 +291,7 @@ export const useFinance = () => {
              guarantee_type: 'receipts_bundle',
              status: 'active',
              note: 'حزمة إيصالات أمانة',
-             created_at: new Date().toISOString()
+             created_at: new new Date().toISOString()
           })
           .select()
           .single();
@@ -352,13 +352,13 @@ export const useFinance = () => {
   }, [toast]);
 
   // Add Guarantor to existing Finance
-  const addGuarantor = useCallback(async ({ finance_id, guarantor_account_id, relationship, note }) => {
+  const addGuarantor = useCallback(async ({ finance_id, guarantor_partner_id, relationship, note }) => {
     try {
        const { data, error } = await supabase
           .from('guarantees')
           .insert([{
              finance_contract_id: finance_id,
-             guarantor_account_id,
+             guarantor_partner_id,
              relationship,
              note,
              guarantee_type: 'personal',
@@ -570,6 +570,8 @@ export const useFinance = () => {
         variant: "destructive"
       });
       return { data: null, error };
+    } finally {
+      setLoading(false);
     }
   }, [toast]);
 

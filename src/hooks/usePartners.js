@@ -2,11 +2,11 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 
-export const useAccounts = () => {
+export const usePartners = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const fetchAccounts = useCallback(async (filters = {}) => {
+  const fetchPartners = useCallback(async (filters = {}) => {
     setLoading(true);
     try {
       // Select all columns including id_card_image
@@ -29,10 +29,10 @@ export const useAccounts = () => {
       if (error) throw error;
       return { data, error: null };
     } catch (error) {
-      console.error('Error fetching accounts:', error);
+      console.error('Error fetching partners:', error);
       toast({
         title: "خطأ",
-        description: "فشل تحميل الحسابات",
+        description: "فشل تحميل الشركاء",
         variant: "destructive"
       });
       return { data: null, error };
@@ -41,7 +41,7 @@ export const useAccounts = () => {
     }
   }, [toast]);
 
-  const getAccountById = useCallback(async (id) => {
+  const getPartnerById = useCallback(async (id) => {
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -53,10 +53,10 @@ export const useAccounts = () => {
       if (error) throw error;
       return { data, error: null };
     } catch (error) {
-      console.error('Error fetching account details:', error);
+      console.error('Error fetching partner details:', error);
       toast({
         title: "خطأ",
-        description: "فشل تحميل بيانات الحساب",
+        description: "فشل تحميل بيانات الشريك",
         variant: "destructive"
       });
       return { data: null, error };
@@ -65,12 +65,12 @@ export const useAccounts = () => {
     }
   }, [toast]);
 
-  const addAccount = useCallback(async (accountData) => {
+  const addPartner = useCallback(async (partnerData) => {
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('partners')
-        .insert([accountData])
+        .insert([partnerData])
         .select()
         .single();
 
@@ -78,15 +78,15 @@ export const useAccounts = () => {
 
       toast({
         title: "تم بنجاح",
-        description: "تم إضافة الحساب بنجاح"
+        description: "تم إضافة الشريك بنجاح"
       });
 
       return { data, error: null };
     } catch (error) {
-      console.error('Error adding account:', error);
+      console.error('Error adding partner:', error);
       toast({
         title: "خطأ",
-        description: "فشل إضافة الحساب",
+        description: "فشل إضافة الشريك",
         variant: "destructive"
       });
       return { data: null, error };
@@ -95,12 +95,12 @@ export const useAccounts = () => {
     }
   }, [toast]);
 
-  const updateAccount = useCallback(async (id, accountData) => {
+  const updatePartner = useCallback(async (id, partnerData) => {
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('partners')
-        .update(accountData)
+        .update(partnerData)
         .eq('id', id)
         .select()
         .single();
@@ -109,15 +109,15 @@ export const useAccounts = () => {
 
       toast({
         title: "تم بنجاح",
-        description: "تم تحديث الحساب بنجاح"
+        description: "تم تحديث الشريك بنجاح"
       });
 
       return { data, error: null };
     } catch (error) {
-      console.error('Error updating account:', error);
+      console.error('Error updating partner:', error);
       toast({
         title: "خطأ",
-        description: "فشل تحديث الحساب",
+        description: "فشل تحديث الشريك",
         variant: "destructive"
       });
       return { data: null, error };
@@ -126,7 +126,7 @@ export const useAccounts = () => {
     }
   }, [toast]);
 
-  const deleteAccount = useCallback(async (id, hardDelete = false) => {
+  const deletePartner = useCallback(async (id, hardDelete = false) => {
     setLoading(true);
     try {
       if (hardDelete) {
@@ -147,15 +147,15 @@ export const useAccounts = () => {
 
       toast({
         title: "تم بنجاح",
-        description: "تم حذف الحساب بنجاح"
+        description: "تم حذف الشريك بنجاح"
       });
 
       return { error: null };
     } catch (error) {
-      console.error('Error deleting account:', error);
+      console.error('Error deleting partner:', error);
       toast({
         title: "خطأ",
-        description: "فشل حذف الحساب",
+        description: "فشل حذف الشريك",
         variant: "destructive"
       });
       return { error };
@@ -164,26 +164,26 @@ export const useAccounts = () => {
     }
   }, [toast]);
 
-  const getMissingFields = useCallback((account) => {
+  const getMissingFields = useCallback((partner) => {
     const requiredFields = [
       { key: 'name', label: 'الاسم' },
       { key: 'phone1', label: 'رقم هاتف 1' },
       { key: 'account_type', label: 'نوع الحساب' }
     ];
 
-    const missing = requiredFields.filter(field => !account[field.key] || account[field.key].trim() === '');
+    const missing = requiredFields.filter(field => !partner[field.key] || partner[field.key].trim() === '');
     return missing;
   }, []);
 
-  const uploadIdCardImage = useCallback(async (file, accountId) => {
+  const uploadIdCardImage = useCallback(async (file, partnerId) => {
     setLoading(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${accountId}-${Date.now()}.${fileExt}`;
+      const fileName = `${partnerId}-${Date.now()}.${fileExt}`;
       const filePath = `${fileName}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('account-id-cards')
+        .from('partner-id-cards')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: true
@@ -192,7 +192,7 @@ export const useAccounts = () => {
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from('account-id-cards')
+        .from('partner-id-cards')
         .getPublicUrl(filePath);
 
       return { url: publicUrl, error: null };
@@ -211,11 +211,11 @@ export const useAccounts = () => {
 
   return {
     loading,
-    fetchAccounts,
-    getAccountById,
-  addAccount,
-    updateAccount,
-    deleteAccount,
+    fetchPartners,
+    getPartnerById,
+    addPartner,
+    updatePartner,
+    deletePartner,
     getMissingFields,
     uploadIdCardImage
   };

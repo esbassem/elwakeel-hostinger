@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
@@ -9,11 +10,13 @@ import {
   Users, 
   ShieldCheck, 
   Banknote,
-  Gavel
+  Gavel,
+  ShoppingCart // أيقونة المبيعات موجودة
 } from 'lucide-react';
 import TeamManagement from '@/components/TeamManagement';
 import FinanceTab from '@/components/FinanceTab';
 import CollectionOfficerDashboard from '@/components/CollectionOfficerDashboard';
+import Sales from '@/pages/Sales'; // استيراد صفحة المبيعات الجديدة
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
@@ -53,8 +56,10 @@ const MainDashboard = ({ user, onLogout }) => {
   const isCollectionOfficer = user?.role === 'collection_officer' || isAdmin;
   const isCustomerAccountant = user?.role === 'customer_accountant';
 
+  // التأكد من أن أداة المبيعات معرفة ومفعلة
   const mainTools = [
     { id: 'khazna', title: "الخزنة", description: "إدارة النقدية والمصروفات", icon: Wallet, available: true, hidden: isCustomerAccountant },
+    { id: 'sales', title: "المبيعات", description: "عرض وإضافة عمليات البيع", icon: ShoppingCart, available: true, hidden: isCustomerAccountant },
     { id: 'finances', title: "التمويلات", description: "إدارة القروض والأقساط", icon: Banknote, available: true, hidden: isCustomerAccountant },
     { id: 'collection', title: "التحصيل", description: "متابعة المتأخرات والديون", icon: Gavel, available: true, hidden: !isCollectionOfficer },
     { id: 'invoices', title: "الفواتير", description: "إنشاء وإدارة الفواتير", icon: FileText, available: false, hidden: isCustomerAccountant },
@@ -73,7 +78,13 @@ const MainDashboard = ({ user, onLogout }) => {
     return <div className="flex items-center justify-center min-h-screen"><p>جاري التوجيه...</p></div>;
   }
 
+  // عند اختيار أداة، يتم عرض المكون المناسب
   if (activeTool) {
+    // هذا هو الشرط الذي يعرض صفحة المبيعات
+    if (activeTool === 'sales') {
+      return <Sales onBack={() => setActiveTool(null)} />;
+    }
+
     const toolData = getToolData(activeTool);
     const toolMap = {
       finances: <FinanceTab currentUser={user} />,

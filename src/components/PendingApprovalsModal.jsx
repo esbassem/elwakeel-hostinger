@@ -203,7 +203,7 @@ const PendingApprovalsModal = ({
                       {/* Compact Header Info (Removed Card) */}
                       <div className="text-center space-y-1.5 mb-2">
                          <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-                           {fullData?.accounts?.name || 'اسم العميل غير متوفر'}
+                            {fullData?.partners?.name ? `${fullData.partners.name} ${fullData.partners.nickname ? `(${fullData.partners.nickname})` : ''}` : 'اسم العميل غير متوفر'}
                          </h2>
                          
                          <div className="flex items-center justify-center gap-2">
@@ -286,12 +286,12 @@ const PendingApprovalsModal = ({
                           البيانات الشخصية
                         </h3>
                         <div className="space-y-1">
-                          <DetailRow label="الاسم" value={fullData?.accounts?.name} />
-                          <DetailRow label="الهاتف 1" value={fullData?.accounts?.phone1} isMono />
-                          <DetailRow label="الهاتف 2" value={fullData?.accounts?.phone2} isMono />
-                          <DetailRow label="العنوان" value={fullData?.accounts?.address} icon={MapPin} />
-                          <DetailRow label="الوظيفة" value={fullData?.accounts?.job} />
-                          <DetailRow label="عنوان العمل" value={fullData?.accounts?.job_address} icon={MapPin} />
+                          <DetailRow label="الاسم" value={fullData?.partners?.name ? `${fullData.partners.name} ${fullData.partners.nickname ? `(${fullData.partners.nickname})` : ''}` : '-'} />
+                          <DetailRow label="الهاتف 1" value={fullData?.partners?.phone1} isMono />
+                          <DetailRow label="الهاتف 2" value={fullData?.partners?.phone2} isMono />
+                          <DetailRow label="العنوان" value={fullData?.partners?.address} icon={MapPin} />
+                          <DetailRow label="الوظيفة" value={fullData?.partners?.job} />
+                          <DetailRow label="عنوان العمل" value={fullData?.partners?.job_address} icon={MapPin} />
                         </div>
                        </div>
   
@@ -301,8 +301,8 @@ const PendingApprovalsModal = ({
                             إثبات الشخصية
                           </h3>
                           <div className="grid grid-cols-2 gap-3">
-                             <ImagePreview label="البطاقة (أمام)" url={fullData?.accounts?.id_card_front || fullData?.accounts?.id_card_image} />
-                             <ImagePreview label="البطاقة (خلف)" url={fullData?.accounts?.id_card_back} />
+                             <ImagePreview label="البطاقة (أمام)" url={fullData?.partners?.id_card_front || fullData?.partners?.id_card_image} />
+                             <ImagePreview label="البطاقة (خلف)" url={fullData?.partners?.id_card_back} />
                           </div>
                        </div>
                     </motion.div>

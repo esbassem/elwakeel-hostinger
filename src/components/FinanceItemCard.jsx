@@ -4,7 +4,7 @@ import { CheckCircle2, Clock, XCircle, User, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const FinanceItemCard = ({ finance, onClick }) => {
-  const beneficiaryName = finance.accounts?.name || finance.accounts?.nickname || 'مستفيد غير معروف';
+  const beneficiaryName = finance.partners?.name ? `${finance.partners.name} ${finance.partners.nickname ? `(${finance.partners.nickname})` : ''}` : 'مستفيد غير معروف';
   const status = finance.status || 'pending'; // pending, approved, rejected
   
   // Status Config
