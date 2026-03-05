@@ -11,12 +11,13 @@ import {
   ShieldCheck, 
   Banknote,
   Gavel,
-  ShoppingCart // أيقونة المبيعات موجودة
+  ShoppingCart
 } from 'lucide-react';
 import TeamManagement from '@/components/TeamManagement';
 import FinanceTab from '@/components/FinanceTab';
 import CollectionOfficerDashboard from '@/components/CollectionOfficerDashboard';
-import Sales from '@/pages/Sales'; // استيراد صفحة المبيعات الجديدة
+import Sales from '@/pages/Sales';
+import KhaznaV2 from '@/components/KhaznaV2';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
@@ -39,12 +40,7 @@ const MainDashboard = ({ user, onLogout }) => {
       toast({ title: "قريباً", description: "هذه الأداة قيد التطوير." });
       return;
     }
-
-    if (toolId === 'khazna') {
-      navigate('/khazna-v2');
-    } else {
-      setActiveTool(toolId);
-    }
+    setActiveTool(toolId);
   };
   
   const getToolData = (toolId) => {
@@ -56,19 +52,18 @@ const MainDashboard = ({ user, onLogout }) => {
   const isCollectionOfficer = user?.role === 'collection_officer' || isAdmin;
   const isCustomerAccountant = user?.role === 'customer_accountant';
 
-  // التأكد من أن أداة المبيعات معرفة ومفعلة
   const mainTools = [
-    { id: 'khazna', title: "الخزنة", description: "إدارة النقدية والمصروفات", icon: Wallet, available: true, hidden: isCustomerAccountant },
-    { id: 'sales', title: "المبيعات", description: "عرض وإضافة عمليات البيع", icon: ShoppingCart, available: true, hidden: isCustomerAccountant },
-    { id: 'finances', title: "التمويلات", description: "إدارة القروض والأقساط", icon: Banknote, available: true, hidden: isCustomerAccountant },
-    { id: 'collection', title: "التحصيل", description: "متابعة المتأخرات والديون", icon: Gavel, available: true, hidden: !isCollectionOfficer },
-    { id: 'invoices', title: "الفواتير", description: "إنشاء وإدارة الفواتير", icon: FileText, available: false, hidden: isCustomerAccountant },
-    { id: 'inventory', title: "المخزون", description: "متابعة البضائع والكميات", icon: Package, available: false, hidden: isCustomerAccountant },
+    { id: 'khazna', title: "الخزنة", description: "إدارة النقدية والمصروفات", icon: Wallet, available: true, hidden: isCustomerAccountant, color: 'bg-charcoal-blue' },
+    { id: 'sales', title: "المبيعات", description: "عرض وإضافة عمليات البيع", icon: ShoppingCart, available: true, hidden: isCustomerAccountant, color: 'bg-charcoal-blue' },
+    { id: 'finances', title: "التمويلات", description: "إدارة القروض والأقساط", icon: Banknote, available: true, hidden: isCustomerAccountant, color: 'bg-charcoal-blue' },
+    { id: 'collection', title: "التحصيل", description: "متابعة المتأخرات والديون", icon: Gavel, available: true, hidden: !isCollectionOfficer, color: 'bg-amber-600' },
+    { id: 'invoices', title: "الفواتير", description: "إنشاء وإدارة الفواتير", icon: FileText, available: false, hidden: isCustomerAccountant, color: 'bg-slate-500' },
+    { id: 'inventory', title: "المخزون", description: "متابعة البضائع والكميات", icon: Package, available: false, hidden: isCustomerAccountant, color: 'bg-slate-500' },
   ];
 
   const adminTools = [
-    { id: 'team', title: "الموظفين", description: "إدارة حسابات وصلاحيات الفريق", icon: Users, available: true },
-    { id: 'permissions', title: "الصلاحيات", description: "تخصيص مستويات الوصول", icon: ShieldCheck, available: false },
+    { id: 'team', title: "الموظفين", description: "إدارة حسابات وصلاحيات الفريق", icon: Users, available: true, color: 'bg-indigo-700' },
+    { id: 'permissions', title: "الصلاحيات", description: "تخصيص مستويات الوصول", icon: ShieldCheck, available: false, color: 'bg-slate-500' },
   ];
 
   const filteredMainTools = mainTools.filter(t => !t.hidden);
@@ -78,37 +73,29 @@ const MainDashboard = ({ user, onLogout }) => {
     return <div className="flex items-center justify-center min-h-screen"><p>جاري التوجيه...</p></div>;
   }
 
-  // عند اختيار أداة، يتم عرض المكون المناسب
   if (activeTool) {
-    // هذا هو الشرط الذي يعرض صفحة المبيعات
-    if (activeTool === 'sales') {
-      return <Sales onBack={() => setActiveTool(null)} />;
-    }
-
     const toolData = getToolData(activeTool);
     const toolMap = {
+      khazna: <KhaznaV2 currentUser={user} />,
+      sales: <Sales />,
       finances: <FinanceTab currentUser={user} />,
       collection: <CollectionOfficerDashboard />,
       team: <TeamManagement currentUser={user} />,
     };
     
+    const sectionColor = toolData?.color || 'bg-background';
+    
     return (
-       <motion.div key={activeTool} initial={{opacity: 0, scale: 0.98}} animate={{opacity: 1, scale: 1}} className="bg-background min-h-screen">
-         <header className="flex items-center justify-between p-2.5 border-b sticky top-0 bg-background/80 backdrop-blur-sm z-10">
+       <motion.div key={activeTool} initial={{opacity: 0, scale: 0.98}} animate={{opacity: 1, scale: 1}} className={cn("min-h-screen", sectionColor)}>
+         <header className={cn("flex items-center justify-between p-2.5 sticky top-0 z-10", sectionColor === 'bg-background' ? 'bg-background/80 backdrop-blur-sm' : sectionColor)}>
             <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" onClick={() => setActiveTool(null)} className="rounded-full">
+                <Button variant="ghost" size="icon" onClick={() => setActiveTool(null)} className="rounded-full text-white hover:bg-white/10 hover:text-white">
                     <ChevronRight className="w-6 h-6" />
                 </Button>
-                <div className="p-2 bg-secondary rounded-full">
-                   {toolData && <toolData.icon className="w-5 h-5 text-foreground" />}
-                </div>
+                <h2 className="text-xl font-bold text-white">{toolData?.title}</h2>
             </div>
-           <h1 className="text-lg font-bold absolute left-1/2 -translate-x-1/2">{toolData?.title}</h1>
-           <Button variant="ghost" size="icon" onClick={onLogout} className="rounded-full">
-                <LogOut className="w-5 h-5 text-muted-foreground" />
-            </Button>
          </header>
-         <main className="p-4 sm:p-6">
+         <main>
             {toolMap[activeTool]}
          </main>
       </motion.div>

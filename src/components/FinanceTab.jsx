@@ -154,7 +154,7 @@ const FinanceTab = ({ currentUser }) => {
           
           <div className="lg:col-span-4 xl:col-span-3 space-y-4 lg:sticky lg:top-6 order-1">
              
-             <div className="bg-gradient-to-br from-blue-700 to-indigo-700 p-4 md:p-5 rounded-2xl shadow-lg shadow-blue-900/10 text-white relative overflow-hidden group">
+             <div className="p-4 md:p-5 rounded-2xl text-white relative overflow-hidden group">
                 
                 <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
                 <div className="absolute bottom-0 left-0 w-20 h-20 bg-indigo-500/30 rounded-full blur-xl pointer-events-none"></div>
@@ -183,7 +183,7 @@ const FinanceTab = ({ currentUser }) => {
 
                   <Button 
                     onClick={handleNewFinanceClick}
-                    className="w-full bg-white text-blue-700 hover:bg-blue-50 hover:text-blue-800 font-bold h-10 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm"
+                    className="w-full bg-white/10 text-white hover:bg-white/20 font-bold h-10 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm"
                   >
                     <Plus className="w-4 h-4" />
                     <span>تمويل جديد</span>

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 
 // --- Mock Data ---
 const salesInvoices = [
@@ -65,69 +65,61 @@ const Sales = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 text-slate-900">
-      <header className="bg-slate-50 sticky top-0 z-10 px-4 pt-4 pb-2">
-        <Button variant="ghost" size="icon" className="rounded-full h-12 w-12 hover:bg-slate-200">
-          <ArrowRight className="h-6 w-6 text-slate-700" />
-        </Button>
-      </header>
-
-      <header className="bg-slate-50 px-6 pb-4">
-        <h1 className="text-5xl font-bold text-slate-900">المبيعات</h1>
-      </header>
-      
-      <main className="flex-grow px-4 pb-4 overflow-y-auto">
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          
-          <div className="flex justify-between items-center mb-8">
-            <div className="flex items-center gap-2">
-                <Button onClick={() => handleMonthChange(1)} variant="ghost" size="icon" className="rounded-full h-10 w-10">
-                    <ChevronLeft className="h-5 w-5 text-slate-600" />
-                </Button>
-                <h2 className="text-lg font-bold text-slate-800 w-32 text-center">{monthName}</h2>
-                <Button onClick={() => handleMonthChange(-1)} variant="ghost" size="icon" className="rounded-full h-10 w-10">
-                    <ChevronRight className="h-5 w-5 text-slate-600" />
-                </Button>
+    <div>
+        <div className="w-full max-w-3xl mx-auto px-4 sm:px-6">
+          <h1 className="text-5xl font-bold text-white mb-4 text-right">المبيعات</h1>
+        </div>
+        <div className="bg-white rounded-t-[2rem] shadow-sm p-4 sm:p-6 w-full mt-4 min-h-[calc(100vh-150px)]">
+          <div className="w-full max-w-3xl mx-auto">
+            <div className="flex justify-between items-center mb-8">
+                <div className="flex items-center gap-2">
+                    <Button onClick={() => handleMonthChange(1)} variant="secondary" size="icon" className="rounded-full h-8 w-8">
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <h2 className="text-sm font-bold text-slate-800 w-28 text-center tabular-nums">{monthName}</h2>
+                    <Button onClick={() => handleMonthChange(-1)} variant="secondary" size="icon" className="rounded-full h-8 w-8">
+                        <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                </div>
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold">
+                  <Plus className="ml-2 h-5 w-5" />
+                  إضافة فاتورة
+              </Button>
             </div>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold">
-                <Plus className="ml-2 h-5 w-5" />
-                إضافة فاتورة
-            </Button>
-          </div>
 
-          <div className="text-right mb-8">
-            <p className="text-base text-slate-500">إجمالي مبيعات الشهر</p>
-            <p className="text-4xl font-extrabold text-slate-900 tracking-tight">
-              {monthlyTotal.toLocaleString('ar-EG')} جنيه
-            </p>
-          </div>
+            <div className="text-right mb-8">
+              <p className="text-base text-slate-500">إجمالي مبيعات الشهر</p>
+              <p className="text-4xl font-extrabold text-slate-900 tracking-tight">
+                {monthlyTotal.toLocaleString('ar-EG')} جنيه
+              </p>
+            </div>
 
-          {/* Invoices List */}
-          <div className="border-t border-slate-200">
-            <div className="divide-y divide-slate-200">
-              {filteredInvoices.length > 0 ? (
-                filteredInvoices.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between py-5">
-                    <div className="mr-4">
-                      <p className="text-base font-semibold text-slate-900">{item.customer}</p>
-                      <p className="text-sm text-slate-500">{new Date(item.date).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' })}</p>
-                    </div>
-                    <div className="text-left">
-                      <p className="text-lg font-bold text-slate-900">{item.amount.toLocaleString('ar-EG')} جنيه</p>
-                      <div className="flex items-center justify-end gap-2 mt-1">
-                        <p className={`text-sm font-semibold ${getStatusClass(item.status)}`}>{item.status}</p>
-                        <span className={`h-2.5 w-2.5 rounded-full ${getStatusDotClass(item.status)}`}></span>
+            {/* Invoices List */}
+            <div className="border-t border-slate-200">
+              <div className="divide-y divide-slate-200">
+                {filteredInvoices.length > 0 ? (
+                  filteredInvoices.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between py-5">
+                      <div className="mr-4">
+                        <p className="text-base font-semibold text-slate-900">{item.customer}</p>
+                        <p className="text-sm text-slate-500">{new Date(item.date).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' })}</p>
+                      </div>
+                      <div className="text-left">
+                        <p className="text-lg font-bold text-slate-900">{item.amount.toLocaleString('ar-EG')} جنيه</p>
+                        <div className="flex items-center justify-end gap-2 mt-1">
+                          <p className={`text-sm font-semibold ${getStatusClass(item.status)}`}>{item.status}</p>
+                          <span className={`h-2.5 w-2.5 rounded-full ${getStatusDotClass(item.status)}`}></span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-center py-10 text-slate-500">لا توجد فواتير لهذا الشهر.</p>
-              )}
+                  ))
+                ) : (
+                  <p className="text-center py-10 text-slate-500">لا توجد فواتير لهذا الشهر.</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </main>
     </div>
   );
 };
