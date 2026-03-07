@@ -86,20 +86,36 @@ const MainDashboard = ({ user, onLogout }) => {
     const sectionColor = toolData?.color || 'bg-background';
     
     return (
-       <motion.div key={activeTool} initial={{opacity: 0, scale: 0.98}} animate={{opacity: 1, scale: 1}} className={cn("min-h-screen", sectionColor)}>
-         <header className={cn("flex items-center justify-between p-2.5 sticky top-0 z-10", sectionColor === 'bg-background' ? 'bg-background/80 backdrop-blur-sm' : sectionColor)}>
-            <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" onClick={() => setActiveTool(null)} className="rounded-full text-white hover:bg-white/10 hover:text-white">
-                    <ChevronRight className="w-6 h-6" />
-                </Button>
-                <h2 className="text-xl font-bold text-white">{toolData?.title}</h2>
-            </div>
-         </header>
-         <main>
-            {toolMap[activeTool]}
-         </main>
+      <motion.div
+        key={activeTool}
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className={cn("h-screen overflow-hidden flex flex-col", sectionColor)}
+      >
+        <header
+          className={cn(
+            "flex items-center justify-between p-2.5 shrink-0 sticky top-0 z-10",
+            sectionColor === 'bg-background' ? 'bg-background/80 backdrop-blur-sm' : sectionColor
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setActiveTool(null)}
+              className="rounded-full text-white hover:bg-white/10 hover:text-white"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </Button>
+            <h2 className="text-xl font-bold text-white">{toolData?.title}</h2>
+          </div>
+        </header>
+    
+        <main className="flex-1 min-h-0 overflow-hidden">
+          {toolMap[activeTool]}
+        </main>
       </motion.div>
-    )
+    );
   }
 
   return (
