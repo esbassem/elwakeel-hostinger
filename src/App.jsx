@@ -60,7 +60,7 @@ function App() {
       </Helmet>
       
       {/* The font-cairo class is removed, the font is now globally set in index.css */}
-      <div className="min-h-screen bg-stone-50 text-stone-800" dir="rtl">
+      <div className="h-screen bg-stone-50 text-stone-800" dir="rtl">
         {!isAuthenticated ? (
           <LoginPage onLogin={handleLogin} />
         ) : (

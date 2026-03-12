@@ -19,9 +19,8 @@ const Khazna = ({ currentUser, onBack }) => {
   const { toast } = useToast();
   const amountInputRef = useRef(null);
   const scrollRef = useRef(null);
-
-  // State for scroll-based animations
-  const [isScrolled, setIsScrolled] = useState(false);
+  const scrollTimeoutRef = useRef(null);
+  const isSnappingRef = useRef(false);
 
   // States for sheets and dialogs
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -39,19 +38,6 @@ const Khazna = ({ currentUser, onBack }) => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
-
-  // --- Scroll Handler ---
-  useEffect(() => {
-    const handleScroll = () => {
-      if (scrollRef.current) {
-        const { scrollTop } = scrollRef.current;
-        setIsScrolled(scrollTop > 50); // Adjust threshold as needed
-      }
-    };
-    const scrollableElement = scrollRef.current;
-    scrollableElement?.addEventListener('scroll', handleScroll);
-    return () => scrollableElement?.removeEventListener('scroll', handleScroll);
-  }, []);
 
   // --- Helper Functions ---
   const formatCurrency = (value) => {
@@ -254,64 +240,124 @@ const Khazna = ({ currentUser, onBack }) => {
   const formatNumber = (numStr) => !numStr ? '' : Number(numStr).toLocaleString('en-US');
   const stepVariants = { enter: { opacity: 0 }, center: { opacity: 1 }, exit: { opacity: 0 } };
 
+  const animateScroll = useCallback((element, to, duration, onComplete) => {
+    const start = element.scrollTop;
+    const change = to - start;
+    let startTime = null;
+
+    const easeOutExpo = (t, b, c, d) => {
+        return (t === d) ? b + c : c * (-Math.pow(2, -10 * t / d) + 1) + b;
+    };
+
+    const animate = (currentTime) => {
+        if (startTime === null) {
+            startTime = currentTime;
+        }
+        const timeElapsed = currentTime - startTime;
+        const run = easeOutExpo(timeElapsed, start, change, duration);
+        element.scrollTop = run;
+        if (timeElapsed < duration) {
+            requestAnimationFrame(animate);
+        } else {
+            element.scrollTop = to;
+            if (onComplete) onComplete();
+        }
+    };
+
+    requestAnimationFrame(animate);
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    if (isSnappingRef.current) {
+        return;
+    }
+
+    if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+    }
+
+    scrollTimeoutRef.current = setTimeout(() => {
+        const container = scrollRef.current;
+        if (!container) return;
+
+        const scrollTop = container.scrollTop;
+        const snapPosition = 150;
+        const threshold = snapPosition / 2;
+
+        if (scrollTop > 0 && scrollTop < snapPosition) {
+            const targetPosition = scrollTop < threshold ? 0 : snapPosition;
+            
+            isSnappingRef.current = true;
+            animateScroll(container, targetPosition, 200, () => { 
+              isSnappingRef.current = false;
+            });
+        }
+    }, 100);
+  }, [animateScroll]);
+
   return (
-    <div ref={scrollRef} className="h-full w-full overflow-y-auto bg-charcoal-blue">
-      {/* --- Sticky Header --- */}
-      <motion.header 
-        className="sticky top-0 z-20 flex items-center justify-between p-2.5 bg-charcoal-blue/80 backdrop-blur-sm"
-        initial={false}
-        animate={{ opacity: isScrolled ? 1 : 0, y: isScrolled ? 0 : -20 }}
-        transition={{ duration: 0.2 }}
-      >
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={onBack} className="rounded-full text-white hover:bg-white/10 hover:text-white">
-            <ChevronRight className="w-6 h-6" />
-          </Button>
-          <h2 className="text-xl font-bold text-white">الخزنة</h2>
-        </div>
-      </motion.header>
+    <div className="h-full w-full relative bg-charcoal-blue overflow-hidden">
+      {/* Static blue background part */}
+      <div className="relative z-20 text-center text-white pt-4 pb-8">
+        <p className="text-sm text-slate-300">الرصيد المتاح</p>
+        <p className="text-5xl font-extrabold tracking-tighter">{formatCurrency(balance)}</p>
+        {pendingAmount > 0 && (
+          <button onClick={() => setIsReviewSheetOpen(true)} className="mt-3 text-xs text-slate-200 bg-white/5 rounded-full px-3 py-1 hover:bg-white/10">
+            <span>قيد المراجعة: <span className="font-semibold text-amber-300">{formatCurrency(pendingAmount)}</span></span>
+            <span className='mx-1.5 opacity-50'>•</span>
+            <span>المتوقع: <span className="font-semibold text-white">{formatCurrency(projectedBalance)}</span></span>
+          </button>
+        )}
+      </div>
+      
+      {/* Scrolling container as an overlay */}
+      <div ref={scrollRef} onScroll={handleScroll} className="absolute inset-0 overflow-y-auto z-10">
+        
+        {/* Spacer to push the white card down below the blue area */}
+        <div className="h-[150px] flex-shrink-0"></div>
 
-      <main className="relative z-10">
-        {/* Main Balance Display */}
-        <motion.div 
-          className="text-center text-white pt-2 pb-8"
-          initial={false}
-          animate={{ scale: isScrolled ? 0.9 : 1, opacity: isScrolled ? 0 : 1 }}
-          transition={{ duration: 0.2 }}
-        >
-          <p className="text-sm text-slate-300">الرصيد المتاح</p>
-          <p className="text-5xl font-extrabold tracking-tighter">{formatCurrency(balance)}</p>
-          {pendingAmount > 0 && (
-            <button onClick={() => setIsReviewSheetOpen(true)} className="mt-3 text-xs text-slate-200 bg-white/5 rounded-full px-3 py-1 hover:bg-white/10">
-              <span>قيد المراجعة: <span className="font-semibold text-amber-300">{formatCurrency(pendingAmount)}</span></span>
-              <span className='mx-1.5 opacity-50'>•</span>
-              <span>المتوقع: <span className="font-semibold text-white">{formatCurrency(projectedBalance)}</span></span>
-            </button>
-          )}
-        </motion.div>
-
-        {/* White Content Card */}
-        <div className="bg-white rounded-t-[2rem] shadow-lg p-4 sm:p-6 w-full min-h-[calc(100vh-150px)]">
-          <div className="w-full max-w-3xl mx-auto">
-            {/* Month Switcher & Add Button */}
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center gap-2">
-                <Button onClick={() => handleMonthChange(1)} variant="secondary" size="icon" className="rounded-full h-8 w-8" disabled={isCurrentMonth}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <h2 className="text-sm font-bold text-slate-800 w-28 text-center tabular-nums">{monthName}</h2>
-                <Button onClick={() => handleMonthChange(-1)} variant="secondary" size="icon" className="rounded-full h-8 w-8">
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
+        {/* White card. The container is now scrolling, not the whole page div. */}
+        <div className="bg-white rounded-t-[2rem] shadow-lg w-full min-h-[calc(100vh-210px)]">
+          {/* The sticky header for the card. It will now stick to the top of the scrolling container */}
+          <div className="sticky top-0 z-20">
+            <div
+              className="absolute top-0 left-0 w-[2rem] h-[2rem]"
+              style={{
+                background: 'radial-gradient(circle at right bottom, transparent 2rem, rgb(18 26 45) 0px) right top',
+                backgroundPosition: 'top left',
+              }}
+            ></div>
+            <div
+              className="absolute top-0 right-0 w-[2rem] h-[2rem]"
+              style={{
+                background: 'radial-gradient(circle at left bottom, transparent 2rem, rgb(18 26 45) 0px) right top',
+                backgroundPosition: 'top right',
+              }}
+            ></div>
+            <div className="bg-white border-b border-slate-200">
+              <div className="w-full max-w-3xl mx-auto px-4 sm:px-6">
+                <div className="flex justify-between items-center py-4">
+                  <div className="flex items-center gap-2">
+                    <Button onClick={() => handleMonthChange(1)} variant="secondary" size="icon" className="rounded-full h-8 w-8" disabled={isCurrentMonth}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <h2 className="text-sm font-bold text-slate-800 w-28 text-center tabular-nums">{monthName}</h2>
+                    <Button onClick={() => handleMonthChange(-1)} variant="secondary" size="icon" className="rounded-full h-8 w-8">
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <Button onClick={handleOpenSheet} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm h-9">
+                    <Plus className="ml-2 h-4 w-4" />
+                    إضافة عملية
+                  </Button>
+                </div>
               </div>
-              <Button onClick={handleOpenSheet} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm h-9">
-                <Plus className="ml-2 h-4 w-4" />
-                إضافة عملية
-              </Button>
             </div>
+          </div>
 
+          <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 pt-1">
             {/* Transactions List */}
-            <div className="border-t border-slate-200">
+            <div className="">
               {loading ? (
                   <div className="text-center py-10 flex justify-center"><Loader2 className="w-8 h-8 text-slate-400 animate-spin"/></div>
               ) : filteredTransactions.length > 0 ? (
@@ -341,7 +387,7 @@ const Khazna = ({ currentUser, onBack }) => {
             </div>
           </div>
         </div>
-      </main>
+      </div>
 
       {/* --- ALL THE SHEETS --- */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>

@@ -11,7 +11,14 @@ const salesData = [
     { id: 2, customer: 'فاطمة حسين', product: 'شاشة تلفزيون', amount: 4800, time: '11:20 ص', date: '2023-10-26' },
     { id: 3, customer: 'عبدالله خالد', product: 'سماعات لاسلكية', amount: 550, time: '09:15 م', date: '2023-10-25' },
     { id: 4, customer: 'نورة سعد', product: 'جهاز لوحي', amount: 1800, time: '01:30 م', date: '2023-09-15' },
+    { id: 5, customer: 'خالد الفيصل', product: 'طابعة مكتبية', amount: 1200, time: '04:00 م', date: '2023-09-15' },
     { id: 6, customer: 'سارة إبراهيم', product: 'لابتوب محمول', amount: 6500, time: '10:00 ص', date: '2023-09-12' },
+    { id: 7, customer: 'أحمد منصور', product: 'كاميرا رقمية', amount: 3200, time: '08:55 ص', date: '2023-09-12' },
+    { id: 8, customer: 'ريم عبدالله', product: 'ساعة ذكية', amount: 950, time: '07:30 م', date: '2023-08-30' },
+    { id: 9, customer: 'يوسف حمد', product: 'مكيف هواء', amount: 3500, time: '12:10 م', date: '2023-08-28' },
+    { id: 10, customer: 'لمى رياض', product: 'غسالة ملابس', amount: 2800, time: '02:00 م', date: '2023-08-25' },
+    { id: 11, customer: 'بدر سلطان', product: 'جهاز عرض بروجكتر', amount: 2100, time: '06:45 م', date: '2023-08-22' },
+    { id: 12, customer: 'هند فهد', product: 'مكنسة كهربائية', amount: 800, time: '09:00 ص', date: '2023-08-20' },
 ];
 const customerDebt = 12500;
 
@@ -26,7 +33,7 @@ const Sales = ({ onBack }) => {
 
   const groupedAndFilteredSales = useMemo(() => {
     const filtered = searchTerm
-      ? salesData.filter(sale => 
+      ? salesData.filter(sale =>
           sale.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
           sale.product.toLowerCase().includes(searchTerm.toLowerCase())
         )
@@ -35,7 +42,7 @@ const Sales = ({ onBack }) => {
     return filtered.reduce((acc, sale) => {
         const saleDate = new Date(sale.date);
         const monthYear = new Intl.DateTimeFormat('ar-SA', { month: 'long', year: 'numeric' }).format(saleDate);
-        
+
         if (!acc[monthYear]) acc[monthYear] = [];
         acc[monthYear].push(sale);
         return acc;
@@ -47,9 +54,9 @@ const Sales = ({ onBack }) => {
   }
 
   return (
-    <div dir="rtl" className="bg-white dark:bg-black min-h-dvh text-gray-900 dark:text-gray-100">
+    <div dir="rtl" className="bg-white dark:bg-black text-gray-900 dark:text-gray-100 flex flex-col" style={{height: '100%'}}>
       {/* Header */}
-      <header className="px-4 sm:px-6 pt-10 pb-4 sticky top-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm z-10">
+      <header className="px-4 sm:px-6 pt-10 pb-4 bg-white/80 dark:bg-black/80 backdrop-blur-sm z-10 shrink-0">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
             <h1 className="text-3xl font-bold">المبيعات</h1>
             <div className="flex items-center gap-2">
@@ -63,8 +70,8 @@ const Sales = ({ onBack }) => {
         </div>
       </header>
 
-      {/* Main Content (Purely typographic & whitespace) */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 pb-8 space-y-6">
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto max-w-7xl mx-auto w-full px-4 sm:px-6 pt-4 pb-24 space-y-6">
           {/* Stats */}
           <div className="flex items-center justify-around py-2">
             <StatItem title="مبيعات اليوم" value={formatCurrency(todaySalesTotal)} />
@@ -73,10 +80,10 @@ const Sales = ({ onBack }) => {
           </div>
 
           {/* Search Pill */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="بحث..."
               className="w-full bg-gray-100 dark:bg-gray-800 border-2 border-transparent focus:border-blue-500 rounded-full text-base pr-12 pl-5 py-3 outline-none transition-colors duration-200"
               value={searchTerm}
@@ -84,7 +91,7 @@ const Sales = ({ onBack }) => {
             />
           </div>
 
-          {/* The Simplest Possible List */}
+          {/* Sales List */}
           <AnimatePresence>
             {Object.keys(groupedAndFilteredSales).length > 0 ? (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4 pt-2">
@@ -121,7 +128,6 @@ const StatItem = ({ title, value, isButton = false }) => {
   );
 };
 
-// The simplest possible SaleItem: Text on a blank canvas, separated by whitespace.
 const SaleItem = ({ sale }) => (
     <div className="flex items-center p-3 cursor-pointer rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800/70">
         <div className="ml-4 flex-shrink-0">
