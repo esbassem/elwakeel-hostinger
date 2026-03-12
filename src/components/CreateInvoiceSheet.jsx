@@ -9,7 +9,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import { useAccounts } from '@/hooks/useAccounts';
 import { useAccountMoves } from '@/hooks/useAccountMoves';
-import { User, Search, UserPlus, Loader2, X, Phone, Camera, CheckCircle2, Tractor, ArrowRight, Wallet, CreditCard, Printer, Edit, FileText, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { User, Search, UserPlus, Loader2, X, Phone, Camera, CheckCircle2, Tractor, ArrowRight, Wallet, CreditCard, Printer, Edit, FileText, Calendar, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/customSupabaseClient';
 
@@ -650,6 +650,7 @@ const AddCashPaymentSheet = ({ isOpen, onClose, onSave }) => {
 
 const FinancingSheet = ({ isOpen, onClose, onSave, onAddNew, customer, fetchAllCustomerPaymentsForSelection, loading }) => {
     const [payments, setPayments] = useState([]);
+    const [selectedPayment, setSelectedPayment] = useState(null);
 
     useEffect(() => {
         if (isOpen && customer) {
@@ -659,17 +660,29 @@ const FinancingSheet = ({ isOpen, onClose, onSave, onAddNew, customer, fetchAllC
             };
             loadData();
         } else {
-             setPayments([]); // Clear data when closing
+             setTimeout(() => {
+                setPayments([]);
+                setSelectedPayment(null);
+             }, 300);
         }
     }, [isOpen, customer, fetchAllCustomerPaymentsForSelection]);
 
-    const handleSelect = (payment) => {
+    const handlePaymentClick = (payment) => {
+        setSelectedPayment(payment);
+    };
+
+    const handleConfirm = () => {
+        if (!selectedPayment) return;
         onSave({
             type: 'financing',
-            amount: payment.amount_total,
-            description: `${payment.pay_method || 'تمويل'} - ${payment.notes || ''}`,
-            original_move_id: payment.id
+            amount: selectedPayment.amount_total,
+            description: `${selectedPayment.pay_method || 'تمويل'} - ${selectedPayment.notes || ''}`,
+            original_move_id: selectedPayment.id
         });
+    };
+
+    const handleBack = () => {
+        setSelectedPayment(null);
     };
     
     const getFinancierIcon = (name) => {
@@ -692,29 +705,81 @@ const FinancingSheet = ({ isOpen, onClose, onSave, onAddNew, customer, fetchAllC
                     className="fixed bottom-0 left-0 right-0 h-[85vh] bg-white z-[70] flex flex-col rounded-t-2xl border-t" 
                     dir="rtl"
                 >
-                    <header className="flex-shrink-0 p-3 bg-white border-b flex items-center justify-between gap-3">
-                        <Button variant="ghost" onClick={onClose} className="w-28 justify-start">إلغاء</Button>
-                        <h2 className="text-lg font-bold text-center flex-grow">الدفعات المتاحة للعميل</h2>
-                        <Button variant="outline" className="h-11 shrink-0" onClick={onAddNew}>
-                            <UserPlus className="w-4 h-4 ml-2" /> إضافة جديد
-                        </Button>
-                    </header>
-                    <main className="flex-grow overflow-y-auto bg-slate-50">
-                        {loading ? (
-                            <div className="flex items-center justify-center h-full text-slate-500"><Loader2 className="w-6 h-6 animate-spin mr-3"/><span>جاري التحميل...</span></div>
-                        ) : payments.length > 0 ? (
-                            <div className="divide-y divide-slate-100 bg-white">{payments.map(payment => {
-                                const Icon = getFinancierIcon(payment.pay_method);
-                                return (
-                                    <div key={payment.id} onClick={() => handleSelect(payment)} className="p-4 flex justify-between items-center cursor-pointer hover:bg-blue-50 active:bg-blue-100 transition-colors">
-                                        <div className="flex items-center gap-4"><div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 shrink-0 border"><Icon className="w-6 h-6" /></div><div><p className="font-bold text-lg text-slate-800">{payment.pay_method || 'دفعة'}</p><p className="text-xs text-slate-500 mt-0.5">{payment.notes || '---'}</p></div></div>
-                                        <div className="text-left"><p className="font-mono font-bold text-2xl text-blue-600">{Number(payment.amount_total).toLocaleString('ar-EG')}</p><p className="text-xs text-slate-500 mt-0.5">ج.م</p></div>
-                                    </div>
-                                )
-                            })}</div>
+                    <header className="flex-shrink-0 p-3 bg-white border-b flex items-center justify-between gap-3 h-16">
+                        {selectedPayment ? (
+                            <>
+                               <Button variant="ghost" onClick={handleBack} className="w-28 justify-start">رجوع</Button>
+                               <h2 className="text-lg font-bold text-center flex-grow">تأكيد اختيار الدفعة</h2>
+                               <Button onClick={handleConfirm} className="w-28 font-bold">تأكيد</Button>
+                            </>
                         ) : (
-                            <div className="text-center py-16 text-slate-500"><FileText className="w-10 h-10 mx-auto mb-3"/><p className="font-bold">لا توجد دفعات متاحة</p><p className="text-sm mt-1">هذا العميل ليس لديه دفعات مسجلة.</p></div>
+                            <>
+                                <Button variant="ghost" onClick={onClose} className="w-28 justify-start">إلغاء</Button>
+                                <h2 className="text-lg font-bold text-center flex-grow">الدفعات المتاحة للعميل</h2>
+                                <Button variant="outline" className="h-11 shrink-0" onClick={onAddNew}>
+                                    <UserPlus className="w-4 h-4 ml-2" /> إضافة جديد
+                                </Button>
+                            </>
                         )}
+                    </header>
+                    <main className="flex-grow overflow-y-auto bg-slate-50/50 relative">
+                        <AnimatePresence mode="wait">
+                            {selectedPayment ? (
+                                <motion.div 
+                                    key="details" 
+                                    initial={{ opacity: 0, x: 50 }} 
+                                    animate={{ opacity: 1, x: 0 }} 
+                                    exit={{ opacity: 0, x: -50 }} 
+                                    transition={{ duration: 0.2, ease: 'easeInOut' }} 
+                                    className="absolute inset-0 bg-white p-4 space-y-4"
+                                >
+                                    <div className="bg-slate-50 rounded-lg p-4 border text-center">
+                                       <p className="text-sm text-slate-500">مبلغ الدفعة</p>
+                                       <p className="font-mono font-bold text-4xl text-blue-600 mt-1">{Number(selectedPayment.amount_total).toLocaleString('ar-EG')}</p>
+                                       <p className="text-sm text-slate-500 mt-1">جنيه مصري</p>
+                                    </div>
+                                    <div className="bg-white rounded-lg p-4 border border-slate-200/80 space-y-3 text-sm">
+                                      <div className="flex justify-between items-center"><span className="text-slate-500">البيان</span><span className="font-semibold text-slate-800 text-right">{selectedPayment.pay_method || 'دفعة'}</span></div>
+                                      <div className="border-t"></div>
+                                      <div className="flex justify-between items-center"><span className="text-slate-500">لحساب التاجر</span><span className="font-semibold text-slate-800 text-right">{selectedPayment.merchant_account || '---'}</span></div>
+                                      <div className="border-t"></div>
+                                      <div className="flex justify-between items-start"><span className="text-slate-500 pt-1">ملاحظات</span><p className="font-normal text-slate-700 text-right max-w-[70%]">{selectedPayment.notes || '---'}</p></div>
+                                    </div>
+                                    {selectedPayment.attachment_image && (
+                                        <a href={selectedPayment.attachment_image} target="_blank" rel="noopener noreferrer" className="block">
+                                           <div className="mt-4 p-3 rounded-lg border bg-slate-50 hover:bg-slate-100 flex items-center justify-between transition-colors duration-200">
+                                                <div className="flex items-center gap-3">
+                                                    <img src={selectedPayment.attachment_image} alt="مرفق" className="w-12 h-12 rounded-md object-cover bg-slate-200"/>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-slate-800">عرض المرفق</p>
+                                                        <p className="text-xs text-slate-500">فتح في نافذة جديدة</p>
+                                                    </div>
+                                                </div>
+                                                <ExternalLink className="w-5 h-5 text-slate-500" />
+                                           </div>
+                                        </a>
+                                    )}
+                                </motion.div>
+                            ) : (
+                                <motion.div key="list" className="h-full">
+                                    {loading ? (
+                                        <div className="flex items-center justify-center h-full text-slate-500"><Loader2 className="w-6 h-6 animate-spin mr-3"/><span>جاري التحميل...</span></div>
+                                    ) : payments.length > 0 ? (
+                                        <div className="divide-y divide-slate-100 bg-white">{payments.map(payment => {
+                                            const Icon = getFinancierIcon(payment.pay_method);
+                                            return (
+                                                <div key={payment.id} onClick={() => handlePaymentClick(payment)} className="p-4 flex justify-between items-center cursor-pointer hover:bg-blue-50 active:bg-blue-100 transition-colors">
+                                                    <div className="flex items-center gap-4"><div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 shrink-0 border"><Icon className="w-6 h-6" /></div><div><p className="font-bold text-lg text-slate-800">{payment.pay_method || 'دفعة'}</p><p className="text-xs text-slate-500 mt-0.5 truncate max-w-40">{payment.notes || '---'}</p></div></div>
+                                                    <div className="text-left flex flex-col items-end"><p className="font-mono font-bold text-2xl text-blue-600">{Number(payment.amount_total).toLocaleString('ar-EG')}</p><p className="text-xs text-slate-500 mt-0.5">ج.م</p></div>
+                                                </div>
+                                            )
+                                        })}</div>
+                                    ) : (
+                                        <div className="text-center py-16 text-slate-500"><FileText className="w-10 h-10 mx-auto mb-3"/><p className="font-bold">لا توجد دفعات متاحة</p><p className="text-sm mt-1">هذا العميل ليس لديه دفعات مسجلة.</p></div>
+                                    )}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </main>
                 </motion.div>
             </>)}

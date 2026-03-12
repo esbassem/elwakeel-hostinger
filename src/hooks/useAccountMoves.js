@@ -200,32 +200,196 @@ export const useAccountMoves = () => {
         }
     }, [toast]);
 
-
     const fetchAllCustomerPaymentsForSelection = useCallback(async (customerId) => {
         if (!customerId) return [];
+        setLoading(true);
         try {
-            const { data, error } = await supabase
-                .from('account_moves').select(`id, notes, pay_method, amount_total`)
-                .eq('partner_id', customerId).eq('move_type', 'payment').eq('state', 'posted');
+            // 1. Get all payment moves for the customer
+            const { data: moves, error: movesError } = await supabase
+                .from('account_moves')
+                .select('id, notes, pay_method, amount_total, attachment_image')
+                .eq('partner_id', customerId)
+                .eq('move_type', 'payment')
+                .eq('state', 'posted')
+                .order('id', { ascending: false });
 
-            if (error) throw error;
-            return data;
+            if (movesError) throw new Error(`فشل جلب قيود الدفعات: ${movesError.message}`);
+            if (!moves || moves.length === 0) return [];
+
+            const moveIds = moves.map(m => m.id);
+
+            // 2. Get all debit lines for these moves
+            const { data: lines, error: linesError } = await supabase
+                .from('account_move_lines')
+                .select('move_id, account_id')
+                .in('move_id', moveIds)
+                .gt('debit', 0);
+
+            if (linesError) throw new Error(`فشل جلب سطور الدفعات: ${linesError.message}`);
+            if (!lines || lines.length === 0) {
+                 return moves.map(move => ({...move, merchant_account: 'غير محدد'}));
+            }
+
+            const accountIds = [...new Set(lines.map(l => l.account_id))];
+
+            // 3. Get account names
+            const { data: accounts, error: accountsError } = await supabase
+                .from('account_accounts')
+                .select('id, name')
+                .in('id', accountIds);
+                
+            if (accountsError) throw new Error(`فشل جلب أسماء الحسابات: ${accountsError.message}`);
+
+            const accountNamesById = accounts.reduce((acc, account) => {
+                acc[account.id] = account.name;
+                return acc;
+            }, {});
+
+            // 4. Map merchant account name to each move
+            const merchantAccountByMoveId = lines.reduce((acc, line) => {
+                acc[line.move_id] = accountNamesById[line.account_id];
+                return acc; 
+            }, {});
+
+            // 5. Combine all data
+            const formattedData = moves.map(move => ({
+                ...move,
+                merchant_account: merchantAccountByMoveId[move.id] || 'غير محدد',
+            }));
+
+            return formattedData;
+
         } catch (error) {
             console.error("Error fetching customer payments:", error.message);
-            toast({ title: "خطأ", description: "فشل جلب دفعات العميل المتاحة", variant: "destructive" });
+            toast({ title: "خطأ", description: error.message || "فشل جلب دفعات العميل المتاحة", variant: "destructive" });
             return [];
+        } finally {
+            setLoading(false);
         }
-    }, [toast]);
+    }, [toast, setLoading]);
+
 
     const createCustomerPayment = useCallback(async (paymentData) => {
-        console.error("createCustomerPayment is not fully implemented.", paymentData);
-        toast({
-            title: "وظيفة غير مكتملة",
-            description: "منطق إنشاء دفعة تمويل جديدة من الصفر لم يتم تنفيذه بالكامل بعد.",
-            variant: "destructive",
-        });
-        return { success: false, error: "Not Implemented" };
-    }, [toast]);
+        setLoading(true);
+        let move_id = null;
+        let attachmentImageUrl = null;
+
+        try {
+            // 1. Validation
+            if (!paymentData.partner_id || !paymentData.amount || !paymentData.pay_method || !paymentData.mpatner_id) {
+                throw new Error("البيانات الأساسية للدفع غير مكتملة (العميل، المبلغ، طريقة الدفع، حساب التاجر).");
+            }
+            if (Number(paymentData.amount) <= 0) {
+                throw new Error("مبلغ الدفعة يجب أن يكون أكبر من صفر.");
+            }
+
+            // 2. Handle File Upload
+            if (paymentData.attach_img) {
+                const file = paymentData.attach_img;
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${Date.now()}.${fileExt}`;
+                const filePath = `${paymentData.partner_id}/finance_${fileName}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('account-id-cards')
+                    .upload(filePath, file);
+
+                if (uploadError) {
+                    throw new Error(`فشل رفع المرفق: ${uploadError.message}`);
+                }
+                
+                const { data: urlData } = supabase.storage
+                    .from('account-id-cards')
+                    .getPublicUrl(filePath);
+
+                attachmentImageUrl = urlData.publicUrl;
+            }
+
+            // 3. Get Account IDs
+            const requiredAccounts = ['ذمم مدينة عملاء', paymentData.mpatner_id];
+            const accountIds = await getAccountIds(requiredAccounts);
+            const receivableAccountId = accountIds['ذمم مدينة عملاء'];
+            const merchantAccountId = accountIds[paymentData.mpatner_id];
+
+            // 4. Create Main Account Move
+            const { data: move, error: moveError } = await supabase
+                .from('account_moves')
+                .insert({
+                    name: `دفعة تمويل - ${paymentData.pay_method}`,
+                    move_type: 'payment',
+                    partner_id: paymentData.partner_id,
+                    date: new Date().toISOString(),
+                    amount_total: paymentData.amount,
+                    notes: paymentData.notes,
+                    pay_method: paymentData.pay_method,
+                    state: 'posted',
+                    attachment_image: attachmentImageUrl,
+                })
+                .select('id')
+                .single();
+
+            if (moveError) {
+                console.error("Error creating payment move:", moveError);
+                throw new Error(`فشل إنشاء قيد الدفعة الرئيسي: ${moveError.message}`);
+            }
+            move_id = move.id;
+
+            // 5. Create Move Lines
+            const moveLinesPayload = [
+                {
+                    move_id: move_id,
+                    account_id: merchantAccountId,
+                    partner_id: paymentData.partner_id, 
+                    debit: paymentData.amount,
+                    credit: 0,
+                    price: 0,
+                    name: `إيداع تمويل ${paymentData.pay_method} للعميل`,
+                },
+                {
+                    move_id: move_id,
+                    account_id: receivableAccountId,
+                    partner_id: paymentData.partner_id,
+                    debit: 0,
+                    credit: paymentData.amount,
+                    price: 0,
+                    name: `دفعة من ${paymentData.pay_method}`,
+                },
+            ];
+
+            const { error: linesError } = await supabase
+                .from('account_move_lines')
+                .insert(moveLinesPayload);
+
+            if (linesError) {
+                console.error("Error creating payment move lines:", linesError);
+                throw new Error(`فشل إنشاء سطور قيد الدفعة: ${linesError.message}`);
+            }
+            
+            toast({
+                title: "تم بنجاح",
+                description: "تم تسجيل دفعة التمويل بنجاح.",
+                className: "bg-green-50 border-green-200"
+            });
+            setLoading(false);
+            return { success: true, error: null };
+
+        } catch (error) {
+            console.error("Full error in createCustomerPayment:", error);
+
+            if (move_id) {
+                await supabase.from('account_moves').delete().eq('id', move_id);
+            }
+
+            toast({
+                title: "فشل",
+                description: error.message || "حدث خطأ غير متوقع أثناء حفظ الدفعة.",
+                variant: "destructive"
+            });
+            setLoading(false);
+            return { success: false, error: error.message };
+        }
+    }, [toast, setLoading]);
+
 
     return {
         loading,
