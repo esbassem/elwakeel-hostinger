@@ -8,7 +8,7 @@ import CreateInvoiceSheet from '@/components/CreateInvoiceSheet';
 import { Loader2, Frown, Plus, ChevronLeft, ChevronRight, FileText, ArrowUpRight } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
-// --- Data Fetching Hook (No Change) ---
+// --- Data Fetching Hook (No changes needed) ---
 const useSalesInvoices = () => {
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -19,8 +19,10 @@ const useSalesInvoices = () => {
         setError(null);
         try {
             const { data: moves, error: movesError } = await supabase
-                .from('account_moves').select(`id, name, invoice_date, amount_total, partner:partner_id(id, name), lines:account_move_lines(id, move_id, account_id, debit)`)
-                .eq('move_type', 'sale').order('invoice_date', { ascending: false });
+                .from('account_moves')
+                .select(`id, name, invoice_date, amount_total, partner:partner_id(id, name), lines:account_move_lines(id, move_id, account_id, debit, credit, name, vehicle:vehicles(product_name, model_year, color, condition, chassis_no))`)
+                .eq('move_type', 'sale')
+                .order('invoice_date', { ascending: false });
             if (movesError) throw new Error(`Failed to fetch invoices: ${movesError.message}`);
 
             const receivableLineIds = moves.map(m => m.lines.find(l => l.debit > 0)?.id).filter(Boolean);
@@ -43,12 +45,23 @@ const useSalesInvoices = () => {
                 else if (paid_amount > 0) status = 'partial';
                 else status = 'due';
 
-                return { ...move, paid_amount, remaining_amount, status };
+                const products = move.lines.filter(l => l.credit > 0).map(l => {
+                    if (!l.vehicle) return { name: l.name };
+                    return {
+                        name: l.vehicle.product_name || l.name,
+                        model: l.vehicle.model_year,
+                        color: l.vehicle.color,
+                        condition: l.vehicle.condition,
+                        chassis_no: l.vehicle.chassis_no
+                    };
+                });
+
+                return { ...move, paid_amount, remaining_amount, status, products };
             });
 
             setInvoices(processedInvoices);
         } catch (err) {
-            setError(err.message);
+            setError(err);
         } finally {
             setLoading(false);
         }
@@ -60,7 +73,7 @@ const useSalesInvoices = () => {
 };
 
 
-// --- Reusable Components ---
+// --- Reusable Components (V21 - Minimalist Product Card) ---
 const InvoiceListItem = ({ invoice, onClick }) => {
     const statusConfig = {
         paid: { text: 'مدفوع', color: 'text-green-600', dotColor: 'bg-green-500' },
@@ -68,15 +81,61 @@ const InvoiceListItem = ({ invoice, onClick }) => {
         due: { text: 'مستحق', color: 'text-red-600', dotColor: 'bg-red-500' },
     }[invoice.status];
 
+    const getArabicCondition = (condition) => {
+        if (condition === 'new') return 'جديد';
+        if (condition === 'used') return 'مستعمل';
+        return condition;
+    };
+
     return (
-        <div onClick={onClick} className="flex justify-between items-center py-5 cursor-pointer hover:bg-slate-50/70 rounded-lg mx-1 px-3">
-            <div className="text-right">
-                <p className="font-bold text-gray-900 text-base">{invoice.partner?.name || 'عميل غير محدد'}</p>
-                <p className="text-sm text-gray-500 mt-1">{new Date(invoice.invoice_date).toLocaleDateString('ar-EG-u-nu-latn', { day: 'numeric', month: 'long' })}</p>
+        <div onClick={onClick} className="flex justify-between items-start py-5 px-4 cursor-pointer hover:bg-slate-50/70">
+
+            {/* Right Side: Hierarchical layout */}
+            <div className="flex-grow mr-4 min-w-0">
+                
+                {/* Row 1: Customer Name */}
+                <p className="font-bold text-gray-800 text-base truncate">{invoice.partner?.name || 'عميل غير محدد'}</p>
+
+                {/* Row 2: Date (closer to name) */}
+                <p className="text-sm text-slate-500 mt-1">
+                    {new Date(invoice.invoice_date).toLocaleDateString('ar-EG-u-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </p>
+
+                {/* Row 3: Product Cards (minimalist design) */}
+                {invoice.products?.length > 0 && (
+                    <div className="mt-3">
+                        <div className="flex flex-wrap items-start gap-2">
+                            {invoice.products.map((product, index) => {
+                                const translatedCondition = getArabicCondition(product.condition);
+                                const mainDetails = [translatedCondition, product.color, product.model].filter(Boolean).join(' • ');
+
+                                return (
+                                    <div key={index} className="bg-slate-100/70 px-3 py-2 rounded-md w-full">
+                                        <div className="flex flex-col">
+                                            <div className="flex items-baseline gap-x-2 flex-wrap">
+                                                 <p className="font-semibold text-sm text-slate-800">{product.name}</p>
+                                                 <p className="text-xs text-slate-500">
+                                                    {mainDetails}
+                                                 </p>
+                                            </div>
+                                             {product.chassis_no && (
+                                                <p className="text-xs text-slate-500 font-mono tracking-wider truncate mt-1">
+                                                    شاسيه: {product.chassis_no}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
-            <div className="text-left">
+
+            {/* Left Side: Financials */}
+            <div className="text-left flex-shrink-0 pt-0.5">
                 <p className="font-mono font-bold text-lg text-gray-900">{`${invoice.amount_total.toLocaleString('ar-EG')} ج.م`}</p>
-                <div className="flex items-center justify-end gap-2 mt-1">
+                <div className="flex items-center justify-end gap-2 mt-1.5">
                     <p className={cn("text-sm font-semibold", statusConfig.color)}>{statusConfig.text}</p>
                     <div className={cn("w-2 h-2 rounded-full", statusConfig.dotColor)}></div>
                 </div>
@@ -86,7 +145,8 @@ const InvoiceListItem = ({ invoice, onClick }) => {
 };
 
 
-// --- Final Layout: Professional, Clean, with a Subtle Gradient Header ---
+
+// --- Main Sales Component (V22 - Heavier Separator) ---
 const Sales = () => {
     const { invoices, loading, error, refetch } = useSalesInvoices();
     const [isCreateSheetOpen, setCreateSheetOpen] = useState(false);
@@ -145,13 +205,12 @@ const Sales = () => {
                 </header>
 
                 <main className="-mt-6 relative z-10">
-                    {/* --- Part 2: White content sheet --- */}
                     <section className="bg-white rounded-t-2xl shadow-lg pt-6 pb-12 mx-3 min-h-[70vh]">
                         <div className="px-4 sm:px-6 pb-6 border-b border-slate-100">
                             <div className="flex justify-center items-center gap-4 mb-6">
-                                <Button size="icon" variant="ghost" className="rounded-full h-11 w-11 text-gray-600" onClick={() => changeMonth(1)}><ChevronRight className="h-6 w-6"/></Button>
+                                <Button size="icon" variant="ghost" className="rounded-full h-11 w-11 text-gray-600" onClick={() => changeMonth(1)}><ChevronRight className="h-6 w-6" /></Button>
                                 <h2 className="text-xl font-bold text-gray-800 text-center w-48">{currentMonthStr}</h2>
-                                <Button size="icon" variant="ghost" className="rounded-full h-11 w-11 text-gray-600" onClick={() => changeMonth(-1)}><ChevronLeft className="h-6 w-6"/></Button>
+                                <Button size="icon" variant="ghost" className="rounded-full h-11 w-11 text-gray-600" onClick={() => changeMonth(-1)}><ChevronLeft className="h-6 w-6" /></Button>
                             </div>
 
                             <div className="grid grid-cols-2 gap-x-4 text-center">
@@ -166,14 +225,14 @@ const Sales = () => {
                             </div>
                         </div>
                         
-                        <div className="pt-4">
+                        <div className="pt-2">
                             {loading && !invoices.length ? (
                                 <div className="text-center py-24"><Loader2 className="w-8 h-8 mx-auto animate-spin text-gray-400" /><p className="mt-3 text-sm text-gray-500">جاري تحميل الفواتير...</p></div>
                             ) : error ? (
-                                <div className="text-center py-24"><Frown className="w-10 h-10 mx-auto text-red-400" /><p className="mt-4 font-bold text-red-600">حدث خطأ بالتحميل</p></div>
+                                <div className="text-center py-24"><Frown className="w-10 h-10 mx-auto text-red-400" /><p className="mt-4 font-bold text-red-600">حدث خطأ بالتحميل</p><p className="text-xs text-slate-500 mt-2">{error.message}</p></div>
                             ) : (
                                 monthlyInvoices.length > 0 ? (
-                                    <div className="divide-y divide-slate-100">
+                                    <div className="divide-y-2 divide-slate-300">
                                         {monthlyInvoices.map(invoice => (
                                             <InvoiceListItem key={invoice.id} invoice={invoice} onClick={() => setSelectedInvoiceId(invoice.id)} />
                                         ))}
@@ -190,7 +249,6 @@ const Sales = () => {
                 </main>
             </div>
 
-            {/* Sheets */}
             <SalesInvoiceViewSheet invoiceId={selectedInvoiceId} isOpen={!!selectedInvoiceId} onClose={() => setSelectedInvoiceId(null)} />
             <CreateInvoiceSheet isOpen={isCreateSheetOpen} onClose={handleCloseCreateSheet} />
         </>
