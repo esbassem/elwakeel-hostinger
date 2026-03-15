@@ -1,11 +1,12 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/customSupabaseClient';
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { SalesInvoiceViewSheet } from '@/components/SalesInvoiceViewSheet';
 import CreateInvoiceSheet from '@/components/CreateInvoiceSheet';
-import { Loader2, Frown, Plus, ChevronLeft, ChevronRight, FileText, ArrowUpRight } from 'lucide-react';
+import { Loader2, Frown, Plus, ChevronLeft, ChevronRight, FileText, ArrowUpRight, Search, X, ArrowRight } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
 // --- Data Fetching Hook (No changes needed) ---
@@ -49,31 +50,24 @@ const useSalesInvoices = () => {
                     if (!l.vehicle) return { name: l.name };
                     return {
                         name: l.vehicle.product_name || l.name,
-                        model: l.vehicle.model_year,
-                        color: l.vehicle.color,
-                        condition: l.vehicle.condition,
-                        chassis_no: l.vehicle.chassis_no
+                        model: l.vehicle.model_year, color: l.vehicle.color,
+                        condition: l.vehicle.condition, chassis_no: l.vehicle.chassis_no
                     };
                 });
 
                 return { ...move, paid_amount, remaining_amount, status, products };
             });
-
             setInvoices(processedInvoices);
-        } catch (err) {
-            setError(err);
-        } finally {
-            setLoading(false);
-        }
+        } catch (err) { setError(err); } 
+        finally { setLoading(false); }
     }, []);
 
     useEffect(() => { fetchInvoices(); }, [fetchInvoices]);
-
     return { invoices, loading, error, refetch: fetchInvoices };
 };
 
 
-// --- Reusable Components (V21 - Minimalist Product Card) ---
+// --- Reusable Components ---
 const InvoiceListItem = ({ invoice, onClick }) => {
     const statusConfig = {
         paid: { text: 'مدفوع', color: 'text-green-600', dotColor: 'bg-green-500' },
@@ -88,40 +82,29 @@ const InvoiceListItem = ({ invoice, onClick }) => {
     };
 
     return (
-        <div onClick={onClick} className="flex justify-between items-start py-5 px-4 cursor-pointer hover:bg-slate-50/70">
-
-            {/* Right Side: Hierarchical layout */}
-            <div className="flex-grow mr-4 min-w-0">
-                
-                {/* Row 1: Customer Name */}
-                <p className="font-bold text-gray-800 text-base truncate">{invoice.partner?.name || 'عميل غير محدد'}</p>
-
-                {/* Row 2: Date (closer to name) */}
-                <p className="text-sm text-slate-500 mt-1">
-                    {new Date(invoice.invoice_date).toLocaleDateString('ar-EG-u-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' })}
-                </p>
-
-                {/* Row 3: Product Cards (minimalist design) */}
+        <div onClick={onClick} className="flex justify-between items-start py-5 px-6 cursor-pointer hover:bg-slate-50">
+            <div className="flex-grow mr-4 min-w-0 md:flex md:items-start md:gap-x-4">
+                <div className="md:flex-shrink-0 md:w-56 mb-3 md:mb-0">
+                    <p className="font-bold text-gray-800 text-base truncate">{invoice.partner?.name || 'عميل غير محدد'}</p>
+                    <p className="text-sm text-slate-500 mt-1">
+                        {new Date(invoice.invoice_date).toLocaleDateString('ar-EG-u-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </p>
+                </div>
                 {invoice.products?.length > 0 && (
-                    <div className="mt-3">
-                        <div className="flex flex-wrap items-start gap-2">
+                    <div className="min-w-0">
+                        <div className="flex flex-col items-start gap-2">
                             {invoice.products.map((product, index) => {
                                 const translatedCondition = getArabicCondition(product.condition);
                                 const mainDetails = [translatedCondition, product.color, product.model].filter(Boolean).join(' • ');
-
                                 return (
                                     <div key={index} className="bg-slate-100/70 px-3 py-2 rounded-md w-full">
                                         <div className="flex flex-col">
                                             <div className="flex items-baseline gap-x-2 flex-wrap">
                                                  <p className="font-semibold text-sm text-slate-800">{product.name}</p>
-                                                 <p className="text-xs text-slate-500">
-                                                    {mainDetails}
-                                                 </p>
+                                                 <p className="text-xs text-slate-500">{mainDetails}</p>
                                             </div>
                                              {product.chassis_no && (
-                                                <p className="text-xs text-slate-500 font-mono tracking-wider truncate mt-1">
-                                                    شاسيه: {product.chassis_no}
-                                                </p>
+                                                <p className="text-xs text-slate-500 font-mono tracking-wider truncate mt-1">شاسيه: {product.chassis_no}</p>
                                             )}
                                         </div>
                                     </div>
@@ -131,12 +114,17 @@ const InvoiceListItem = ({ invoice, onClick }) => {
                     </div>
                 )}
             </div>
-
-            {/* Left Side: Financials */}
             <div className="text-left flex-shrink-0 pt-0.5">
                 <p className="font-mono font-bold text-lg text-gray-900">{`${invoice.amount_total.toLocaleString('ar-EG')} ج.م`}</p>
                 <div className="flex items-center justify-end gap-2 mt-1.5">
-                    <p className={cn("text-sm font-semibold", statusConfig.color)}>{statusConfig.text}</p>
+                    <p className={cn("text-sm font-semibold", statusConfig.color)}>
+                        {statusConfig.text}
+                        {(invoice.status === 'partial' || invoice.status === 'due') && invoice.remaining_amount > 0 && (
+                            <span className="font-mono text-xs opacity-90 ml-1">
+                                ({`${invoice.remaining_amount.toLocaleString('ar-EG')} ج.م`})
+                            </span>
+                        )}
+                    </p>
                     <div className={cn("w-2 h-2 rounded-full", statusConfig.dotColor)}></div>
                 </div>
             </div>
@@ -144,28 +132,66 @@ const InvoiceListItem = ({ invoice, onClick }) => {
     );
 };
 
+const StatusTabButton = ({ label, isActive, ...props }) => {
+    return (
+        <button
+            className={cn(
+                "py-2 text-sm font-medium transition-colors duration-200",
+                isActive
+                    ? "text-blue-600"
+                    : "text-slate-400 hover:text-slate-600"
+            )}
+            {...props}
+        >
+            <span className="whitespace-nowrap">{label}</span>
+        </button>
+    );
+};
 
 
-// --- Main Sales Component (V22 - Heavier Separator) ---
+// --- Main Sales Component (V39 - Ultimate Minimalism) ---
 const Sales = () => {
     const { invoices, loading, error, refetch } = useSalesInvoices();
     const [isCreateSheetOpen, setCreateSheetOpen] = useState(false);
     const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
     const [viewDate, setViewDate] = useState(new Date());
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [isSearchVisible, setIsSearchVisible] = useState(false);
 
     const { totalOutstanding } = useMemo(() => {
         const outstandingInvoices = invoices.filter(inv => inv.status !== 'paid');
         return { totalOutstanding: outstandingInvoices.reduce((sum, inv) => sum + inv.remaining_amount, 0) };
     }, [invoices]);
 
-    const { monthlyInvoices, monthlyTotal, monthlyCount } = useMemo(() => {
-        const filtered = invoices.filter(inv => {
+    const monthlyInvoices = useMemo(() => {
+        return invoices.filter(inv => {
             const invDate = new Date(inv.invoice_date);
             return invDate.getFullYear() === viewDate.getFullYear() && invDate.getMonth() === viewDate.getMonth();
         });
-        const total = filtered.reduce((sum, inv) => sum + inv.amount_total, 0);
-        return { monthlyInvoices: filtered, monthlyTotal: total, monthlyCount: filtered.length };
     }, [invoices, viewDate]);
+
+    const filteredInvoices = useMemo(() => {
+        let preSearchInvoices = statusFilter === 'outstanding'
+            ? invoices.filter(inv => inv.status === 'due' || inv.status === 'partial')
+            : monthlyInvoices;
+        
+        if (!searchTerm) return preSearchInvoices;
+        
+        const lowercasedTerm = searchTerm.toLowerCase();
+        return preSearchInvoices.filter(invoice => 
+            invoice.partner?.name?.toLowerCase().includes(lowercasedTerm) ||
+            invoice.products.some(p =>
+                p.name?.toLowerCase().includes(lowercasedTerm) ||
+                p.chassis_no?.toLowerCase().includes(lowercasedTerm)
+            )
+        );
+    }, [invoices, monthlyInvoices, statusFilter, searchTerm]);
+
+    const displayedStats = useMemo(() => {
+        const total = filteredInvoices.reduce((sum, inv) => sum + inv.amount_total, 0);
+        return { total, count: filteredInvoices.length };
+    }, [filteredInvoices]);
 
     const changeMonth = (offset) => setViewDate(current => new Date(current.getFullYear(), current.getMonth() + offset, 1));
     const handleCloseCreateSheet = () => { setCreateSheetOpen(false); refetch(); };
@@ -177,10 +203,7 @@ const Sales = () => {
                 <header className="relative bg-gradient-to-br from-blue-600 to-blue-700 pb-8 pt-6 rounded-b-2xl shadow-md">
                     <div className="px-6">
                          <div className="flex justify-end items-center mb-6">
-                            <Button 
-                                onClick={() => setCreateSheetOpen(true)} 
-                                className="bg-white/10 hover:bg-white/20 text-white font-semibold rounded-lg transition-all duration-300 shadow-sm border border-white/20"
-                            >
+                            <Button onClick={() => setCreateSheetOpen(true)} className="bg-white/10 hover:bg-white/20 text-white font-semibold rounded-lg transition-all duration-300 shadow-sm border border-white/20">
                                 <Plus className="w-4 h-4 ml-2" />
                                 <span>إضافة فاتورة</span>
                             </Button>
@@ -205,42 +228,102 @@ const Sales = () => {
                 </header>
 
                 <main className="-mt-6 relative z-10">
-                    <section className="bg-white rounded-t-2xl shadow-lg pt-6 pb-12 mx-3 min-h-[70vh]">
-                        <div className="px-4 sm:px-6 pb-6 border-b border-slate-100">
-                            <div className="flex justify-center items-center gap-4 mb-6">
-                                <Button size="icon" variant="ghost" className="rounded-full h-11 w-11 text-gray-600" onClick={() => changeMonth(1)}><ChevronRight className="h-6 w-6" /></Button>
-                                <h2 className="text-xl font-bold text-gray-800 text-center w-48">{currentMonthStr}</h2>
-                                <Button size="icon" variant="ghost" className="rounded-full h-11 w-11 text-gray-600" onClick={() => changeMonth(-1)}><ChevronLeft className="h-6 w-6" /></Button>
+                    <section className="bg-white rounded-t-2xl shadow-lg pb-12 mx-3 lg:mx-auto lg:max-w-[50rem] min-h-[70vh]">
+                        
+                        <div className="p-4 sm:p-6 space-y-4">
+                            {/* --- Toolbar: Top Row (Filters & Search) --- */}
+                            <div className="flex justify-between items-center gap-4">
+                                <div className={cn("items-center gap-5", isSearchVisible ? "hidden sm:flex" : "flex")}>
+                                    <StatusTabButton label="فواتير الشهر" isActive={statusFilter === 'all'} onClick={() => setStatusFilter('all')} />
+                                    <StatusTabButton label="كل المستحقات" isActive={statusFilter === 'outstanding'} onClick={() => setStatusFilter('outstanding')} />
+                                </div>
+
+                                <div className="flex-1 flex justify-end">
+                                    {isSearchVisible ? (
+                                        <div className="relative w-full sm:hidden">
+                                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                            <Input
+                                                autoFocus
+                                                type="text"
+                                                placeholder="ابحث..."
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className="h-10 w-full rounded-lg bg-slate-100 pl-16 pr-9"
+                                            />
+                                            <Button variant="ghost" className="absolute left-1 top-1/2 -translate-y-1/2 h-8 px-2 text-slate-500" onClick={() => { setIsSearchVisible(false); setSearchTerm(''); }}>
+                                                إلغاء
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <Button size="icon" variant="ghost" className="sm:hidden rounded-full h-10 w-10" onClick={() => setIsSearchVisible(true)}>
+                                            <Search className="w-5 h-5 text-slate-500" />
+                                        </Button>
+                                    )}
+
+                                    <div className="hidden sm:block relative w-full max-w-[200px] sm:max-w-xs">
+                                        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                                        <Input
+                                            type="text"
+                                            placeholder={statusFilter === 'all' ? "ابحث..." : "ابحث في كل المستحقات..."}
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="pl-3 pr-9 h-10 w-full bg-slate-100 rounded-lg transition-all focus-visible:ring-1 focus-visible:ring-blue-500 border-transparent"
+                                        />
+                                        {searchTerm && (
+                                            <Button size="icon" variant="ghost" className="absolute left-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full text-slate-500" onClick={() => setSearchTerm('')}>
+                                                <X className="w-4 h-4" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-x-4 text-center">
-                               <div>
-                                    <p className="text-base text-slate-500">إجمالي الشهر</p>
-                                    <p className="text-3xl font-bold text-slate-800 mt-1">{loading ? '...' : `${monthlyTotal.toLocaleString('ar-EG')} ج.م`}</p>
+                            {/* --- Toolbar: Bottom Row (Month Drawer & Reports) --- */}
+                            {statusFilter === 'all' && (
+                                <div className="flex justify-start items-center">
+                                    <div className="flex items-center bg-white border border-slate-200 rounded-full h-10 p-1">
+                                        <div className="flex items-center pr-1">
+                                            <Button size="icon" variant="ghost" className="rounded-full h-8 w-8 text-gray-500" onClick={() => changeMonth(1)}><ChevronRight className="h-5 w-5" /></Button>
+                                            <h2 className="text-base font-bold text-gray-700 text-center w-auto sm:w-32 px-2 whitespace-nowrap">{currentMonthStr}</h2>
+                                            <Button size="icon" variant="ghost" className="rounded-full h-8 w-8 text-gray-500" onClick={() => changeMonth(-1)}><ChevronLeft className="h-5 w-5" /></Button>
+                                        </div>
+                                        <div className="border-l h-5 border-slate-300"></div>
+                                        <div className="flex items-baseline gap-x-4 px-3 text-sm text-slate-500">
+                                            <p className="font-semibold font-mono text-sm text-slate-600">{loading ? '...' : displayedStats.total.toLocaleString('ar-EG')}</p>
+                                            <div className="flex items-baseline gap-1">
+                                                <p className="font-semibold font-mono text-sm text-slate-600">{loading ? '...' : displayedStats.count}</p>
+                                                <span className="text-xs">فاتورة</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                 <div>
-                                    <p className="text-base text-slate-500">عدد الفواتير</p>
-                                    <p className="text-3xl font-bold text-slate-800 mt-1">{loading ? '...' : monthlyCount}</p>
-                                </div>
-                            </div>
+                            )}
                         </div>
                         
-                        <div className="pt-2">
+                        <hr className="border-slate-200"/>
+
+                        {/* --- Invoice List --- */}
+                        <div>
                             {loading && !invoices.length ? (
                                 <div className="text-center py-24"><Loader2 className="w-8 h-8 mx-auto animate-spin text-gray-400" /><p className="mt-3 text-sm text-gray-500">جاري تحميل الفواتير...</p></div>
                             ) : error ? (
                                 <div className="text-center py-24"><Frown className="w-10 h-10 mx-auto text-red-400" /><p className="mt-4 font-bold text-red-600">حدث خطأ بالتحميل</p><p className="text-xs text-slate-500 mt-2">{error.message}</p></div>
                             ) : (
-                                monthlyInvoices.length > 0 ? (
-                                    <div className="divide-y-2 divide-slate-300">
-                                        {monthlyInvoices.map(invoice => (
+                                filteredInvoices.length > 0 ? (
+                                    <div className="divide-y divide-slate-200">
+                                        {filteredInvoices.map(invoice => (
                                             <InvoiceListItem key={invoice.id} invoice={invoice} onClick={() => setSelectedInvoiceId(invoice.id)} />
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="text-center py-20 px-6">
-                                        <FileText className="w-12 h-12 mx-auto text-slate-300"/>
-                                        <p className="mt-4 text-lg font-semibold text-slate-600">لا توجد فواتير لهذا الشهر</p>
+                                    <div className="text-center py-20 px-6 flex flex-col items-center">
+                                        {searchTerm ? <Search className="w-12 h-12 text-slate-300"/> : <FileText className="w-12 h-12 text-slate-300"/> }
+                                        <p className="mt-4 text-lg font-semibold text-slate-600">
+                                            {searchTerm ? 'لا توجد نتائج تطابق بحثك' : statusFilter === 'outstanding' ? 'لا توجد أي فواتير مستحقة حالياً.' : 'لا توجد فواتير بهذا الشهر'}
+                                        </p>
+                                        <p className="mt-1 text-sm text-slate-400 max-w-xs mx-auto">
+                                            {searchTerm ? 'جرّب كلمة بحث مختلفة.' : statusFilter === 'outstanding' ? '' : 'جرّب تغيير الشهر أو أضف فاتورة جديدة.' }
+                                        </p>
                                     </div>
                                 )
                             )}
