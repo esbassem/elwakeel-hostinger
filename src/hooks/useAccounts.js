@@ -1,5 +1,6 @@
+
 import { useState, useCallback } from 'react';
-import { supabase } from '@/lib/customSupabaseClient'; // Reverted to the original, correct import path
+import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 
 export const useAccounts = () => {
@@ -16,7 +17,6 @@ export const useAccounts = () => {
         .order('created_at', { ascending: false });
 
       if (filters.search) {
-        // The actual original bug fix: removed nickname from the search query
         query = query.or(`name.ilike.%${filters.search}%,phone1.ilike.%${filters.search}%,national_id.ilike.%${filters.search}%`);
       }
 
@@ -68,10 +68,41 @@ export const useAccounts = () => {
   const addAccount = useCallback(async (accountData) => {
     setLoading(true);
     try {
-      // Reverted to the original .select().single() which the component expects
+      const dataToInsert = { ...accountData };
+
+      const uploadFile = async (file, fieldName) => {
+        if (!file || typeof file !== 'object') return null;
+
+        const bucket = 'account-id-cards'; // CORRECTED: Using the user-provided bucket name.
+        const fileExt = file.name.split('.').pop();
+        const path = `public/${accountData.phone1 || 'unknown'}/${fieldName}-${Date.now()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+            .from(bucket)
+            .upload(path, file);
+
+        if (uploadError) {
+            throw new Error(`فشل رفع صورة البطاقة: ${uploadError.message}`);
+        }
+
+        const { data: urlData } = supabase.storage
+            .from(bucket)
+            .getPublicUrl(path);
+
+        return urlData.publicUrl;
+      };
+
+      if (dataToInsert.id_card_front && typeof dataToInsert.id_card_front === 'object') {
+          dataToInsert.id_card_front = await uploadFile(dataToInsert.id_card_front, 'id-front');
+      }
+
+      if (dataToInsert.id_card_back && typeof dataToInsert.id_card_back === 'object') {
+          dataToInsert.id_card_back = await uploadFile(dataToInsert.id_card_back, 'id-back');
+      }
+
       const { data, error } = await supabase
         .from('partners')
-        .insert([accountData])
+        .insert([dataToInsert])
         .select()
         .single();
 
@@ -94,9 +125,37 @@ export const useAccounts = () => {
   const updateAccount = useCallback(async (id, accountData) => {
     setLoading(true);
     try {
+
+        const dataToUpdate = { ...accountData };
+
+        const uploadFile = async (file, fieldName) => {
+            if (!file || typeof file !== 'object') return null;
+    
+            const bucket = 'account-id-cards';
+            const fileExt = file.name.split('.').pop();
+            const path = `public/${dataToUpdate.phone1 || 'unknown'}/${fieldName}-${Date.now()}.${fileExt}`;
+            
+            const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file);
+    
+            if (uploadError) throw new Error(`فشل رفع صورة البطاقة: ${uploadError.message}`);
+
+            const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+    
+            return urlData.publicUrl;
+        };
+
+        if (dataToUpdate.id_card_front && typeof dataToUpdate.id_card_front === 'object') {
+            dataToUpdate.id_card_front = await uploadFile(dataToUpdate.id_card_front, 'id-front-update');
+        }
+
+        if (dataToUpdate.id_card_back && typeof dataToUpdate.id_card_back === 'object') {
+            dataToUpdate.id_card_back = await uploadFile(dataToUpdate.id_card_back, 'id-back-update');
+        }
+
+
       const { data, error } = await supabase
         .from('partners') 
-        .update(accountData)
+        .update(dataToUpdate)
         .eq('id', id)
         .select()
         .single();
@@ -113,7 +172,7 @@ export const useAccounts = () => {
       console.error('Error updating account:', error);
       toast({
         title: "خطأ",
-        description: "فشل تحديث الحساب",
+        description: `فشل تحديث الحساب: ${error.message}`,
         variant: "destructive"
       });
       return { data: null, error };
@@ -121,8 +180,6 @@ export const useAccounts = () => {
       setLoading(false);
     }
   }, [toast]);
-
-  // ... other functions from the original file like delete, etc.
 
   return {
     loading,

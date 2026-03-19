@@ -389,6 +389,133 @@ export const useAccountMoves = () => {
             return { success: false, error: error.message };
         }
     }, [toast, setLoading]);
+    
+    const addPaymentsToInvoice = useCallback(async (invoiceId, payments) => {
+    setLoading(true);
+    let createdPaymentMoveIds = [];
+
+    try {
+        // --- 1. VALIDATIONS ---
+        if (!invoiceId) throw new Error("يجب تحديد الفاتورة.");
+        if (!payments || payments.length === 0) throw new Error("يجب إضافة دفعة واحدة على الأقل.");
+
+        const { data: invoice, error: invoiceError } = await supabase
+            .from('account_moves')
+            .select('partner_id, amount_total')
+            .eq('id', invoiceId)
+            .single();
+        
+        if (invoiceError || !invoice) throw new Error("الفاتورة المستهدفة غير موجودة.");
+
+        const { partner_id: customer_id, amount_total: totalInvoiceAmount } = invoice;
+        
+        for(const p of payments) {
+            if (Number(p.amount || 0) <= 0) throw new Error("قيمة كل دفعة يجب أن تكون أكبر من صفر.");
+        }
+
+        // --- 2. GET ACCOUNTS & INVOICE RECEIVABLE LINE ---
+        const accountIds = await getAccountIds(['ذمم مدينة عملاء', 'الخزنة']);
+        const receivableAccountId = accountIds['ذمم مدينة عملاء'];
+        const cashAccountId = accountIds['الخزنة'];
+
+        const { data: saleReceivableLine, error: lineError } = await supabase
+            .from('account_move_lines')
+            .select('id')
+            .eq('move_id', invoiceId)
+            .eq('account_id', receivableAccountId)
+            .gt('debit', 0)
+            .single();
+
+        if (lineError || !saleReceivableLine) throw new Error("خطأ حرج: تعذر العثور على سطر ذمم العميل الخاص بالفاتورة.");
+        const sale_receivable_line_id = saleReceivableLine.id;
+
+        // --- 3. HANDLE PAYMENTS & ALLOCATIONS ---
+        for (const payment of payments) {
+            if (payment.type === 'cash') {
+                const { data: paymentMove, error: paymentMoveError } = await supabase
+                    .from('account_moves').insert({
+                        name: `Customer Payment - ${new Date().toISOString()}`,
+                        move_type: 'payment',
+                        partner_id: customer_id,
+                        date: new Date().toISOString(),
+                        amount_total: payment.amount,
+                        notes: payment.description,
+                        pay_method: 'cash',
+                        state: 'posted',
+                    }).select('id').single();
+                
+                if (paymentMoveError) throw new Error(`فشل إنشاء قيد الدفعة النقدية: ${paymentMoveError.message}`);
+                createdPaymentMoveIds.push(paymentMove.id);
+                
+                const { data: pLines, error: pLinesError } = await supabase.from('account_move_lines').insert([
+                    { move_id: paymentMove.id, account_id: cashAccountId, debit: payment.amount, credit: 0, price: 0, name: 'دفعة نقدية من العميل' },
+                    { move_id: paymentMove.id, account_id: receivableAccountId, partner_id: customer_id, debit: 0, credit: payment.amount, price: 0, name: 'تسديد على الحساب' }
+                ]).select('id, account_id, credit');
+                    
+                if (pLinesError) throw new Error(`فشل إنشاء سطور الدفعة النقدية: ${pLinesError.message}`);
+                
+                const pReceivableLine = pLines.find(l => l.account_id === receivableAccountId && l.credit > 0);
+                if (!pReceivableLine) throw new Error("خطأ حرج: تعذر العثور على سطر ذمم الدفعة النقدية.");
+                
+                const { error: allocError } = await supabase.from('payment_allocations').insert({
+                    payment_move_line_id: pReceivableLine.id,
+                    invoice_move_line_id: sale_receivable_line_id,
+                    allocated_amount: payment.amount,
+                });
+
+                if (allocError) throw new Error(`فشل ربط الدفعة النقدية بالفاتورة: ${allocError.message}`);
+
+            } else if (payment.type === 'financing' && payment.original_move_id) {
+                const { data: originalLine, error: findLineError } = await supabase
+                    .from('account_move_lines').select('id, credit')
+                    .eq('move_id', payment.original_move_id)
+                    .eq('account_id', receivableAccountId)
+                    .eq('partner_id', customer_id)
+                    .gt('credit', 0)
+                    .maybeSingle();
+
+                if (findLineError) throw new Error(`خطأ أثناء البحث عن حركة التمويل الأصلية: ${findLineError.message}`);
+                if (!originalLine) throw new Error('لم يتم العثور على حركة التمويل الأصلية، أو أنها لا تخص هذا العميل.');
+                
+                const { data: existingAllocs, error: existingAllocsError } = await supabase
+                    .from('payment_allocations').select('allocated_amount')
+                    .eq('payment_move_line_id', originalLine.id);
+                
+                if (existingAllocsError) throw new Error(`فشل جلب التخصيصات السابقة: ${existingAllocsError.message}`);
+
+                const alreadyAllocated = existingAllocs.reduce((sum, alloc) => sum + alloc.allocated_amount, 0);
+                const remainingAvailable = originalLine.credit - alreadyAllocated;
+
+                if (payment.amount > remainingAvailable + 0.01) {
+                    throw new Error(`المبلغ المطلوب (${payment.amount}) أكبر من الرصيد المتاح في الدفعة الأصلية (${remainingAvailable}).`);
+                }
+                
+                const { error: allocError } = await supabase.from('payment_allocations').insert({
+                    payment_move_line_id: originalLine.id,
+                    invoice_move_line_id: sale_receivable_line_id,
+                    allocated_amount: payment.amount,
+                    notes: payment.description || 'تخصيص دفعة تمويل على فاتورة قائمة'
+                });
+                if (allocError) throw new Error(`فشل إنشاء تخصيص دفعة التمويل: ${allocError.message}`);
+            }
+        }
+
+        toast({ title: "نجاح", description: "تم تسجيل الدفعات بنجاح." });
+        setLoading(false);
+        return { success: true };
+
+    } catch (error) {
+        console.error("Error during adding payments to invoice:", error);
+        
+        if (createdPaymentMoveIds.length > 0) {
+            await supabase.from('account_moves').delete().in('id', createdPaymentMoveIds);
+        }
+        
+        toast({ title: "فشل", description: error.message, variant: "destructive" });
+        setLoading(false);
+        return { success: false, error: error.message };
+    }
+}, [toast]);
 
 
     return {
@@ -396,5 +523,6 @@ export const useAccountMoves = () => {
         createSaleInvoice,
         fetchAllCustomerPaymentsForSelection,
         createCustomerPayment,
+        addPaymentsToInvoice
     };
 };

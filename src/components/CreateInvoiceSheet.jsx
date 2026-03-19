@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -12,16 +11,20 @@ import { useAccountMoves } from '@/hooks/useAccountMoves';
 import { User, Search, UserPlus, Loader2, X, Phone, Camera, CheckCircle2, Tractor, ArrowRight, Wallet, CreditCard, Printer, Edit, FileText, Calendar, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/customSupabaseClient';
+import PartnerFormSheet from './partners/PartnerFormSheet';
 
-// --- Sub-component: Simple Input (Label on Top) ---
-const SimpleInput = ({ label, name, ...props }) => (
+const SimpleInput = ({ label, name, className = '', ...props }) => (
     <div className="space-y-1.5">
         <Label htmlFor={name} className="font-semibold px-1 text-slate-800">{label}</Label>
-        <Input id={name} name={name} {...props} className="h-12 bg-slate-100 border-slate-200 shadow-sm text-base" />
+        <Input
+            id={name}
+            name={name}
+            {...props}
+            className={cn("h-12 bg-slate-100 border-slate-200 shadow-sm text-base", className)}
+        />
     </div>
 );
 
-// --- Sub-component: Simple Select (Label on Top) ---
 const SimpleSelect = ({ label, name, value, onChange, children, className }) => (
     <div className="space-y-1.5 w-full">
         <Label htmlFor={name} className="font-semibold px-1 text-slate-800">{label}</Label>
@@ -45,138 +48,121 @@ const SimpleSelect = ({ label, name, value, onChange, children, className }) => 
     </div>
 );
 
-
-// --- Sub-component: File Upload Input ---
-const FileUploadInput = ({ id, label, icon: Icon, fileName, onFileChange }) => {
-    const inputRef = useRef(null);
-    return (
-        <div
-            className="group flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 hover:border-blue-500 transition-all bg-slate-50 h-32 cursor-pointer relative"
-            onClick={() => inputRef.current?.click()}
-        >
-            <input type="file" id={id} name={id} ref={inputRef} onChange={onFileChange} className="hidden" accept="image/*" />
-            {fileName ? (
-                <div className="text-center p-2">
-                    <CheckCircle2 className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                    <p className="text-sm font-bold text-slate-700 break-all">{fileName}</p>
-                    <p className="text-xs text-slate-500 mt-1">اضغط للتغيير</p>
-                </div>
-            ) : (
-                <div className="text-center text-slate-500 group-hover:text-blue-600 transition-colors">
-                    <Icon className="w-8 h-8 mx-auto mb-2" />
-                    <p className="font-semibold">{label}</p>
-                </div>
-            )}
+const InfoDisplayField = ({ label, value, isMono }) => (
+    <div className="space-y-1.5">
+        <Label className="font-semibold px-1 text-slate-800">{label}</Label>
+        <div className="flex items-center h-12 bg-slate-100 border-slate-200 shadow-sm rounded-md px-3">
+            <p className={cn("text-base text-slate-800", isMono && "font-mono")}>
+                {value || <span className="text-slate-400">--</span>}
+            </p>
         </div>
-    );
-};
+    </div>
+);
 
+const ImageDisplayField = ({ label, imageUrl }) => (
+    <div className="space-y-1.5">
+        <Label className="font-semibold px-1 text-slate-800">{label}</Label>
+        <a href={imageUrl} target="_blank" rel="noopener noreferrer" className="block group">
+            <div className="h-32 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center group-hover:border-blue-500 transition-colors relative">
+                {imageUrl ? (
+                    <>
+                        <img src={imageUrl} alt={label} className="max-w-full max-h-full object-contain rounded-md p-1" />
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                           <ExternalLink className="w-8 h-8 text-white" />
+                        </div>
+                    </>
+                ) : (
+                    <div className="text-center text-slate-400">
+                        <Camera className="w-8 h-8 mx-auto mb-1" />
+                        <p className="text-xs font-semibold">لا توجد صورة</p>
+                    </div>
+                )}
+            </div>
+        </a>
+    </div>
+);
 
-
-// --- Sub-component: Customer Selection Sheet ---
-const CustomerSelectionSheet = ({ isOpen, onClose, onCustomerConfirmed, onAddNew, newlyAddedCustomerId, onClearHighlight, onEditCustomer }) => {
+const CustomerSelectionSheet = ({ isOpen, onClose, onCustomerConfirmed, onAddNew, onEdit, newlyAddedCustomerId, onClearHighlight }) => {
   const { fetchAccounts } = useAccounts();
   const [accounts, setAccounts] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState('');
-  const [view, setView] = useState('list'); // 'list' or 'details'
-  const [customerForEditing, setCustomerForEditing] = useState(null);
+  const [view, setView] = useState('list');
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
 
   const openDetailsFor = useCallback((customer) => {
-      setCustomerForEditing(JSON.parse(JSON.stringify(customer))); // Deep copy to avoid mutating original
+      setSelectedCustomer(customer);
       setView('details');
   }, []);
+
+  const loadAccounts = useCallback(async () => {
+      setIsLoading(true);
+      try {
+          const { data } = await fetchAccounts({ account_type: 'customer' });
+          if (data) {
+              const sortedData = [...data].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+              setAccounts(sortedData);
+              if (newlyAddedCustomerId) {
+                  const newCustomer = sortedData.find(c => c.id === newlyAddedCustomerId);
+                  if (newCustomer) {
+                      openDetailsFor(newCustomer);
+                      setTimeout(onClearHighlight, 2500);
+                  }
+              }
+          }
+      } finally {
+          setIsLoading(false);
+      }
+  }, [fetchAccounts, newlyAddedCustomerId, onClearHighlight, openDetailsFor]);
 
   useEffect(() => {
     let timer;
     if (isOpen) {
-        const loadAccounts = async () => {
-            setIsLoading(true);
-            try {
-                const { data } = await fetchAccounts({ account_type: 'customer' });
-                if (data) {
-                     const sortedData = [...data].sort((a, b) => b.id - a.id);
-                     setAccounts(sortedData);
-                     if (newlyAddedCustomerId) {
-                        const newCustomer = sortedData.find(c => c.id === newlyAddedCustomerId);
-                        if (newCustomer) {
-                            openDetailsFor(newCustomer);
-                            setTimeout(onClearHighlight, 2500);
-                        }
-                     } 
-                }
-            } finally { 
-                setIsLoading(false); 
-            }
-        };
-        
-        if(onEditCustomer) {
-           openDetailsFor(onEditCustomer);
-        } else {
-           // Defer loading to prevent animation lag.
-           timer = setTimeout(loadAccounts, 400);
-        }
+        timer = setTimeout(loadAccounts, 150);
     } else {
-        // Reset state after the sheet has animated closed.
         timer = setTimeout(() => {
             setSearch('');
             setView('list');
-            setCustomerForEditing(null);
-            setIsLoading(true);
-            setAccounts([]); // Clear accounts from memory
+            setSelectedCustomer(null);
+            setAccounts([]);
         }, 300);
     }
-
-    return () => {
-        clearTimeout(timer);
-    }
-}, [isOpen, fetchAccounts, newlyAddedCustomerId, onClearHighlight, onEditCustomer, openDetailsFor]);
-
-
-  const handleDetailsChange = (e) => {
-    const { name, value, files } = e.target;
-    setCustomerForEditing(prev => ({ ...prev, [name]: files?.[0] || value }));
-  };
+    return () => clearTimeout(timer);
+  }, [isOpen, loadAccounts]);
 
   const handleConfirm = () => {
-      onCustomerConfirmed(customerForEditing);
+      onCustomerConfirmed(selectedCustomer);
   }
 
-  const handleBackToList = () => {
-      setView('list');
-      if(onEditCustomer) {
-          setTimeout(() => setCustomerForEditing(null), 250);
-      }
+  const handleEditClick = () => {
+    onEdit(selectedCustomer);
   }
 
-  const filteredAccounts = accounts.filter(acc => 
-      acc.name?.toLowerCase().includes(search.toLowerCase()) || 
-      (acc.nickname && acc.nickname.toLowerCase().includes(search.toLowerCase())) || 
+  const filteredAccounts = accounts.filter(acc =>
+      acc.name?.toLowerCase().includes(search.toLowerCase()) ||
+      (acc.nickname && acc.nickname.toLowerCase().includes(search.toLowerCase())) ||
       (acc.phone1 && acc.phone1.includes(search))
   );
-  
+
   return (
     <AnimatePresence>{isOpen && (<>
           <motion.div key="customer-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} onClick={onClose} className="fixed inset-0 bg-black/60 z-[55]" />
           <motion.div key="customer-sheet" initial={{ y: '100%' }} animate={{ y: '0%' }} exit={{ y: '100%' }} transition={{ type: 'tween', duration: 0.4, ease: [0.25, 1, 0.5, 1] }} className="fixed bottom-0 left-0 right-0 h-[80vh] bg-white z-[60] flex flex-col rounded-t-2xl border-t overflow-hidden" dir="rtl">
                <header className="flex-shrink-0 p-3 bg-white border-b flex items-center justify-between gap-3 h-16">
-                  {view === 'details' && customerForEditing ? (
+                  {view === 'details' && selectedCustomer ? (
                       <>
-                         <Button 
-                            variant="ghost" 
-                            onClick={onEditCustomer ? onClose : handleBackToList} 
-                            className="w-28 justify-start"
-                         >
-                            {onEditCustomer ? "إلغاء" : "رجوع للقائمة"}
-                         </Button>
+                        <div className="flex items-center gap-2">
+                          <Button variant="ghost" onClick={() => setView('list')}>رجوع للقائمة</Button>
+                          <Button variant="outline" size="icon" onClick={handleEditClick}><Edit className="h-4 w-4"/></Button>
+                        </div>
                          <h3 className="text-lg font-bold text-center flex-grow">
-                            {onEditCustomer ? "تعديل بيانات العميل" : "تأكيد بيانات العميل"}
+                            بيانات العميل
                          </h3>
-                         <Button 
-                            onClick={handleConfirm} 
+                         <Button
+                            onClick={handleConfirm}
                             className="w-28 font-bold"
                          >
-                            {onEditCustomer ? "حفظ التعديلات" : "تأكيد واختيار"}
+                            تأكيد
                          </Button>
                       </>
                   ) : (
@@ -199,9 +185,9 @@ const CustomerSelectionSheet = ({ isOpen, onClose, onCustomerConfirmed, onAddNew
                             ) : filteredAccounts.length > 0 ? (
                                 <div className="divide-y divide-slate-100">
                                   {filteredAccounts.map(account => (
-                                    <div 
-                                        key={account.id} 
-                                        onClick={() => openDetailsFor(account)} 
+                                    <div
+                                        key={account.id}
+                                        onClick={() => openDetailsFor(account)}
                                         className="p-4 flex items-center gap-3 cursor-pointer hover:bg-blue-50/50 active:bg-blue-100 transition-colors"
                                     >
                                       <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 shrink-0 border"><User className="w-4 h-4" /></div>
@@ -223,16 +209,16 @@ const CustomerSelectionSheet = ({ isOpen, onClose, onCustomerConfirmed, onAddNew
                             transition={{ duration: 0.2, ease: 'easeInOut' }}
                             className="absolute inset-0 bg-white p-4 space-y-4 overflow-y-auto"
                         >
-                            {customerForEditing && (<>
-                                <SimpleInput label="الاسم ثلاثي *" name="name" value={customerForEditing.name || ''} onChange={handleDetailsChange} />
-                                <SimpleInput label="العنوان" name="address" value={customerForEditing.address || ''} onChange={handleDetailsChange} />
+                            {selectedCustomer && (<>
+                                <InfoDisplayField label="الاسم ثلاثي" value={selectedCustomer.name} />
+                                <InfoDisplayField label="العنوان" value={selectedCustomer.address} />
                                 <div className="grid grid-cols-2 gap-4">
-                                    <SimpleInput label="هاتف 1 *" name="phone1" value={customerForEditing.phone1 || ''} onChange={handleDetailsChange} dir="ltr" />
-                                    <SimpleInput label="هاتف 2" name="phone2" value={customerForEditing.phone2 || ''} onChange={handleDetailsChange} dir="ltr" />
+                                    <InfoDisplayField label="هاتف 1" value={selectedCustomer.phone1} isMono />
+                                    <InfoDisplayField label="هاتف 2" value={selectedCustomer.phone2} isMono />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4 pt-4">
-                                    <FileUploadInput id="id_front" label="وجه البطاقة" icon={Camera} fileName={customerForEditing.id_front?.name} onFileChange={handleDetailsChange} />
-                                    <FileUploadInput id="id_back" label="خلف البطاقة" icon={Camera} fileName={customerForEditing.id_back?.name} onFileChange={handleDetailsChange} />
+                                    <ImageDisplayField label="وجه البطاقة" imageUrl={selectedCustomer.id_card_front} />
+                                    <ImageDisplayField label="خلف البطاقة" imageUrl={selectedCustomer.id_card_back} />
                                 </div>
                             </>)}
                         </motion.div>
@@ -243,49 +229,6 @@ const CustomerSelectionSheet = ({ isOpen, onClose, onCustomerConfirmed, onAddNew
     </>)}</AnimatePresence>
   );
 };
-
-// --- Sub-component: Add New Customer Sheet ---
-const AddNewCustomerSheet = ({ isOpen, onClose, onCustomerCreated }) => {
-  const { addAccount, loading } = useAccounts();
-  const { toast } = useToast();
-  const [customerData, setCustomerData] = useState({ name: '', nickname: '', phone1: '', phone2: '', address: '' });
-
-  const handleChange = (e) => { setCustomerData(prev => ({ ...prev, [e.target.name]: e.target.value })); };
-
-  const handleSave = async () => {
-    if (!customerData.name || !customerData.phone1) { toast({ title: "بيانات ناقصة", description: "الرجاء إدخال الاسم ورقم هاتف 1.", variant: "destructive" }); return; }
-    const { data, error } = await addAccount({ ...customerData, account_type: 'customer' });
-    if (error) { toast({ title: "خطأ", description: "فشل إضافة العميل.", variant: "destructive" });
-    } else if (data) { toast({ title: "تم بنجاح", description: "تمت إضافة العميل بنجاح." }); onCustomerCreated(data[0]); }
-  };
-
-  useEffect(() => { 
-      if (!isOpen) { 
-          setTimeout(() => setCustomerData({ name: '', nickname: '', phone1: '', phone2: '', address: '' }), 300); 
-      }
-  }, [isOpen]);
-
-  return (
-    <AnimatePresence>{isOpen && (<>
-          <motion.div key="add-cust-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 z-[65]" />
-          <motion.div key="add-cust-sheet" initial={{ y: '100%' }} animate={{ y: '0%' }} exit={{ y: '100%' }} transition={{ type: 'tween', duration: 0.4, ease: [0.25, 1, 0.5, 1] }} className="fixed bottom-0 left-0 right-0 h-auto max-h-[90vh] bg-white z-[70] flex flex-col rounded-t-2xl border-t" dir="rtl">
-            <header className="flex-shrink-0 p-3 bg-white border-b flex items-center justify-between"><h2 className="text-lg font-bold px-2">إضافة عميل جديد</h2><Button variant="ghost" onClick={onClose}>إلغاء</Button></header>
-            <main className="flex-grow p-4 space-y-4 overflow-y-auto">
-                 <div className="grid grid-cols-2 gap-4">
-                    <SimpleInput label="الاسم ثلاثي *" name="name" value={customerData.name} onChange={handleChange} />
-                    <SimpleInput label="اللقب" name="nickname" value={customerData.nickname} onChange={handleChange} />
-                 </div>
-                 <SimpleInput label="العنوان" name="address" value={customerData.address} onChange={handleChange} />
-                 <div className="grid grid-cols-2 gap-4">
-                    <SimpleInput label="هاتف 1 *" name="phone1" value={customerData.phone1} onChange={handleChange} dir="ltr" />
-                    <SimpleInput label="هاتف 2" name="phone2" value={customerData.phone2} onChange={handleChange} dir="ltr" />
-                 </div>
-            </main>
-            <footer className="p-3 bg-white/80 backdrop-blur-sm border-t"><Button onClick={handleSave} disabled={loading} className="w-full h-12 text-base font-bold">{loading ? <Loader2 className="w-6 h-6 animate-spin" /> : "حفظ واختيار"}</Button></footer>
-          </motion.div></>)}</AnimatePresence>
-  );
-};
-
 
 const useVehicles = () => {
     const [loading, setLoading] = useState(false);
@@ -370,7 +313,7 @@ const AddNewVehicleSheet = ({ isOpen, onClose, onVehicleCreated }) => {
             toast({title: 'بيانات ناقصة', description: 'الرجاء تحديد حالة المركبة (جديد أو مستعمل).', variant: 'destructive'});
             return;
         }
-        
+
         const { data, error } = await addVehicle(vehicle);
 
         if (error) {
@@ -380,9 +323,9 @@ const AddNewVehicleSheet = ({ isOpen, onClose, onVehicleCreated }) => {
             onVehicleCreated(data[0]);
         }
     };
-    
-    useEffect(() => { 
-        if (!isOpen) setTimeout(() => setVehicle(initialState), 300); 
+
+    useEffect(() => {
+        if (!isOpen) setTimeout(() => setVehicle(initialState), 300);
     }, [isOpen]);
 
     return (
@@ -421,7 +364,7 @@ const AddNewVehicleSheet = ({ isOpen, onClose, onVehicleCreated }) => {
                         <SimpleInput label="سنة الموديل" name="model_year" value={vehicle.model_year} onChange={handleChange} type="number" dir="ltr" />
                         <SimpleInput label="اللون" name="color" value={vehicle.color} onChange={handleChange} />
                     </div>
-                    
+
                     <div className="space-y-1.5">
                         <Label htmlFor="notes" className="font-semibold px-1 text-slate-800">ملاحظات</Label>
                         <Textarea id="notes" name="notes" placeholder="أي تفاصيل إضافية..." value={vehicle.notes || ''} onChange={handleChange} className="min-h-[100px] text-base bg-slate-100 border-slate-200" />
@@ -479,7 +422,7 @@ const VehicleSelectionSheet = ({ isOpen, onClose, onVehicleSelect, onAddNew, ite
         if (itemToEdit) onClose();
         else setSelectedVehicle(null);
     };
-    
+
     const itemIdsInCart = itemsInCart.map(item => item.id);
     const filtered = vehicles.filter(v => {
         if (!itemToEdit && itemIdsInCart.includes(v.id)) return false;
@@ -510,7 +453,7 @@ const VehicleSelectionSheet = ({ isOpen, onClose, onVehicleSelect, onAddNew, ite
                         </>
                     )}
                 </header>
-                
+
                 <main className="flex-grow overflow-y-auto bg-slate-50/50">
                     <AnimatePresence mode="wait">
                         {selectedVehicle ? (
@@ -540,9 +483,9 @@ const VehicleSelectionSheet = ({ isOpen, onClose, onVehicleSelect, onAddNew, ite
                                 : filtered.length > 0 ? (
                                     <div className="divide-y divide-slate-100 bg-white">
                                         {filtered.map(v => (
-                                            <div 
-                                                key={v.id} 
-                                                onClick={() => handleSelectClick(v)} 
+                                            <div
+                                                key={v.id}
+                                                onClick={() => handleSelectClick(v)}
                                                 className="p-3 flex justify-between items-center cursor-pointer hover:bg-blue-50/50 transition-colors duration-200"
                                             >
                                                 <div className="flex-grow">
@@ -606,13 +549,13 @@ const AddCashPaymentSheet = ({ isOpen, onClose, onSave }) => {
     return (
         <AnimatePresence>{isOpen && (<>
             <motion.div key="add-cash-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 z-[65]" />
-            <motion.div 
-                key="add-cash-sheet" 
-                initial={{ y: '100%' }} 
-                animate={{ y: '0%' }} 
-                exit={{ y: '100%' }} 
-                transition={{ type: 'tween', duration: 0.4, ease: [0.25, 1, 0.5, 1] }} 
-                className="fixed bottom-0 left-0 right-0 bg-white z-[70] flex flex-col rounded-t-2xl border-t" 
+            <motion.div
+                key="add-cash-sheet"
+                initial={{ y: '100%' }}
+                animate={{ y: '0%' }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'tween', duration: 0.4, ease: [0.25, 1, 0.5, 1] }}
+                className="fixed bottom-0 left-0 right-0 bg-white z-[70] flex flex-col rounded-t-2xl border-t"
                 style={{ height: sheetHeight }}
                 dir="rtl"
             >
@@ -622,7 +565,7 @@ const AddCashPaymentSheet = ({ isOpen, onClose, onSave }) => {
                     <Button onClick={handleSave} className="w-28 font-bold">حفظ الدفعة</Button>
                 </header>
                 <main className="flex-grow p-4 space-y-6 overflow-y-auto bg-slate-50/50">
-                    <SimpleInput 
+                    <SimpleInput
                         label="المبلغ"
                         name="amount"
                         type="number"
@@ -634,13 +577,13 @@ const AddCashPaymentSheet = ({ isOpen, onClose, onSave }) => {
                     />
                     <div className="space-y-1.5">
                         <Label htmlFor="description" className="font-semibold px-1 text-slate-800">البيان (اختياري)</Label>
-                        <Textarea 
+                        <Textarea
                              id="description"
                              name="description"
                              value={description}
                              onChange={(e) => setDescription(e.target.value)}
                              placeholder="مثال: دفعة تحت الحساب، عربون..."
-                             className="min-h-[120px] text-base bg-white border-slate-200 shadow-sm" 
+                             className="min-h-[120px] text-base bg-white border-slate-200 shadow-sm"
                         />
                     </div>
                 </main>
@@ -684,7 +627,7 @@ const FinancingSheet = ({ isOpen, onClose, onSave, onAddNew, customer, fetchAllC
     const handleBack = () => {
         setSelectedPayment(null);
     };
-    
+
     const getFinancierIcon = (name) => {
       const lowerName = name?.toLowerCase() || '';
       if (lowerName.includes('myler') || lowerName.includes('مايلو')) return Tractor;
@@ -696,13 +639,13 @@ const FinancingSheet = ({ isOpen, onClose, onSave, onAddNew, customer, fetchAllC
         <AnimatePresence>{isOpen && (
             <>
                 <motion.div key="fin-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 z-[65]" />
-                <motion.div 
-                    key="fin-sheet" 
-                    initial={{ y: '100%' }} 
-                    animate={{ y: '0%' }} 
-                    exit={{ y: '100%' }} 
-                    transition={{ type: 'tween', duration: 0.4, ease: [0.25, 1, 0.5, 1] }} 
-                    className="fixed bottom-0 left-0 right-0 h-[85vh] bg-white z-[70] flex flex-col rounded-t-2xl border-t" 
+                <motion.div
+                    key="fin-sheet"
+                    initial={{ y: '100%' }}
+                    animate={{ y: '0%' }}
+                    exit={{ y: '100%' }}
+                    transition={{ type: 'tween', duration: 0.4, ease: [0.25, 1, 0.5, 1] }}
+                    className="fixed bottom-0 left-0 right-0 h-[85vh] bg-white z-[70] flex flex-col rounded-t-2xl border-t"
                     dir="rtl"
                 >
                     <header className="flex-shrink-0 p-3 bg-white border-b flex items-center justify-between gap-3 h-16">
@@ -725,12 +668,12 @@ const FinancingSheet = ({ isOpen, onClose, onSave, onAddNew, customer, fetchAllC
                     <main className="flex-grow overflow-y-auto bg-slate-50/50 relative">
                         <AnimatePresence mode="wait">
                             {selectedPayment ? (
-                                <motion.div 
-                                    key="details" 
-                                    initial={{ opacity: 0, x: 50 }} 
-                                    animate={{ opacity: 1, x: 0 }} 
-                                    exit={{ opacity: 0, x: -50 }} 
-                                    transition={{ duration: 0.2, ease: 'easeInOut' }} 
+                                <motion.div
+                                    key="details"
+                                    initial={{ opacity: 0, x: 50 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -50 }}
+                                    transition={{ duration: 0.2, ease: 'easeInOut' }}
                                     className="absolute inset-0 bg-white p-4 space-y-4"
                                 >
                                     <div className="bg-slate-50 rounded-lg p-4 border text-center">
@@ -794,7 +737,7 @@ const AddCustomFinancingSheet = ({ isOpen, onClose, onSave, customer, createCust
     const [notes, setNotes] = useState('');
     const [attachment, setAttachment] = useState(null);
     const { toast } = useToast();
-    
+
     const financiers = ['مايلو', 'امان', 'الوكيل (مباشر)', 'حالا', 'كيان'];
     const merchantAccounts = ['شركة عابدين', 'معرض ابورجب', 'معرض جنو', 'احمد مختار كعبيش', 'معرض الوكيل', 'ذمم مدينة عملاء', 'اخري'];
 
@@ -818,19 +761,22 @@ const AddCustomFinancingSheet = ({ isOpen, onClose, onSave, customer, createCust
     };
 
     const handleSave = async () => {
-        if (!amount || !selectedFinancier || !merchantAccount) { toast({ title: "بيانات ناقصة", description: "الرجاء تعبئة جميع الحقول.", variant: "destructive" }); return; }
-        
-        const { success } = await createCustomerPayment({ 
-            partner_id: customer.id, 
-            pay_method: selectedFinancier, 
-            amount, 
-            mpatner_id: merchantAccount, 
-            notes, 
+        if (!amount || !selectedFinancier || !merchantAccount) {
+            toast({ title: "بيانات ناقصة", description: "الرجاء تعبئة جميع الحقول.", variant: "destructive" });
+            return;
+        }
+
+        const { success } = await createCustomerPayment({
+            partner_id: customer.id,
+            pay_method: selectedFinancier,
+            amount,
+            mpatner_id: merchantAccount,
+            notes,
             attach_img: attachment
         });
 
         if (success) {
-            onSave(); // This will trigger the parent to reopen the financing sheet
+            onSave();
         }
     };
 
@@ -845,12 +791,12 @@ const AddCustomFinancingSheet = ({ isOpen, onClose, onSave, customer, createCust
     return (
         <AnimatePresence>{isOpen && (<>
             <motion.div key="add-fin-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 z-[75]" />
-            <motion.div 
-                key="add-fin-sheet" 
-                initial={{ y: '100%' }} 
-                animate={{ y: '0%' }} 
-                exit={{ y: '100%' }} 
-                transition={{ type: 'tween', duration: 0.4, ease: [0.25, 1, 0.5, 1] }} 
+            <motion.div
+                key="add-fin-sheet"
+                initial={{ y: '100%' }}
+                animate={{ y: '0%' }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'tween', duration: 0.4, ease: [0.25, 1, 0.5, 1] }}
                 className="fixed bottom-0 left-0 right-0 h-[85vh] bg-white z-[80] flex flex-col rounded-t-2xl border-t"
                 dir="rtl"
             >
@@ -881,7 +827,7 @@ const AddCustomFinancingSheet = ({ isOpen, onClose, onSave, customer, createCust
                             </div>
                         </div>
                     )}
-                    
+
                     <AnimatePresence mode="wait">
                         {!selectedFinancier ? (
                             <motion.div
@@ -893,7 +839,7 @@ const AddCustomFinancingSheet = ({ isOpen, onClose, onSave, customer, createCust
                                 className="space-y-2 pt-6"
                             >
                                 {financiers.map(name => (
-                                    <Button 
+                                    <Button
                                         key={name}
                                         variant="outline"
                                         className="w-full h-14 text-base font-medium justify-start p-4 border-slate-200"
@@ -914,7 +860,7 @@ const AddCustomFinancingSheet = ({ isOpen, onClose, onSave, customer, createCust
                             >
                                 <div className="flex items-start gap-3">
                                     <div className="flex-grow">
-                                        <SimpleInput 
+                                        <SimpleInput
                                             label="المبلغ"
                                             name="amount"
                                             type="number"
@@ -937,10 +883,10 @@ const AddCustomFinancingSheet = ({ isOpen, onClose, onSave, customer, createCust
                                         </SimpleSelect>
                                     </div>
                                 </div>
-                                
+
                                 <div className="space-y-1.5">
                                     <Label htmlFor="notes" className="font-semibold px-1 text-slate-800">ملاحظات</Label>
-                                    <Textarea 
+                                    <Textarea
                                         id="notes"
                                         name="notes"
                                         value={notes}
@@ -952,13 +898,6 @@ const AddCustomFinancingSheet = ({ isOpen, onClose, onSave, customer, createCust
 
                                 <div className="space-y-1.5 pt-2">
                                     <Label className="font-semibold px-1 text-slate-800">إرفاق صورة (اختياري)</Label>
-                                    <FileUploadInput
-                                        id="finance_attachment"
-                                        label="إيصال أو مستند"
-                                        icon={Camera}
-                                        fileName={attachment?.name}
-                                        onFileChange={handleFileChange}
-                                    />
                                 </div>
                             </motion.div>
                         )}
@@ -1032,13 +971,13 @@ const DatePickerSheet = ({ isOpen, onClose, value, onChange }) => {
         <AnimatePresence>{isOpen && (
             <>
                 <motion.div key="date-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 z-[65]" />
-                <motion.div 
-                    key="date-sheet" 
-                    initial={{ y: '100%' }} 
-                    animate={{ y: '0%' }} 
-                    exit={{ y: '100%' }} 
-                    transition={{ type: 'tween', duration: 0.4, ease: [0.25, 1, 0.5, 1] }} 
-                    className="fixed bottom-0 left-0 right-0 h-auto bg-white z-[70] flex flex-col rounded-t-2xl border-t pb-4" 
+                <motion.div
+                    key="date-sheet"
+                    initial={{ y: '100%' }}
+                    animate={{ y: '0%' }}
+                    exit={{ y: '100%' }}
+                    transition={{ type: 'tween', duration: 0.4, ease: [0.25, 1, 0.5, 1] }}
+                    className="fixed bottom-0 left-0 right-0 h-auto bg-white z-[70] flex flex-col rounded-t-2xl border-t pb-4"
                     dir="rtl"
                 >
                     <header className="flex-shrink-0 p-4 border-b flex items-center justify-between">
@@ -1060,17 +999,15 @@ const DatePickerSheet = ({ isOpen, onClose, value, onChange }) => {
                         </div>
                     </main>
                 </motion.div>
-            </>)}
-        </AnimatePresence>
+            </>)}</AnimatePresence>
     );
 };
 
-const Step1_CustomerAndProducts = ({ customer, onSelectCustomer, onEditCustomer, items, setItems, onOpenVehicleSelector, onOpenVehicleEditor, invoiceDate, onDateChange, onDatePickerOpen }) => {
-    
+const Step1_CustomerAndProducts = ({ customer, onSelectCustomer, items, setItems, onOpenVehicleSelector, onOpenVehicleEditor, invoiceDate, onDatePickerOpen }) => {
     const handleRemoveItem = (id) => {
         setItems(items.filter(item => item.id !== id));
     };
-    
+
     const total = items.reduce((acc, item) => acc + (Number(item.selling_price) || 0), 0);
 
     const InfoItem = ({ label, value, isMono, className }) => (
@@ -1086,27 +1023,26 @@ const Step1_CustomerAndProducts = ({ customer, onSelectCustomer, onEditCustomer,
 
     return (
         <motion.div key="step1" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            {/* Customer Section */}
             <div className="border-b pb-6 mb-6">
                 {customer ? (
-                    <div onClick={onEditCustomer} className="cursor-pointer">
-                        <div className="flex items-start justify-between -mx-4 px-4 pb-4">
+                    <div className="-mx-4 px-4">
+                        <div className="flex items-start justify-between pb-4">
                             <div className="flex items-center gap-4">
                                 <User className="h-8 w-8 text-slate-600 flex-shrink-0" />
                                 <div>
                                     <h2 className="text-xl font-bold text-slate-800">{customer.name || <span className="text-red-500">--</span>}</h2>
-                                    <p className="text-sm text-slate-500">اضغط هنا لتعديل بيانات العميل</p>
+                                    <p className="text-sm text-slate-500">العميل المحدد للفاتورة الحالية</p>
                                 </div>
                             </div>
-                            <Button 
-                                variant="outline" 
-                                onClick={(e) => { e.stopPropagation(); onSelectCustomer(); }}
+                            <Button
+                                variant="outline"
+                                onClick={onSelectCustomer}
                                 className="bg-white"
                             >
                                 تغيير العميل
                             </Button>
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 pt-4 pr-12">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 pt-4 pr-12 border-t">
                             <InfoItem label="الهاتف" value={customer.phone1} isMono />
                             <InfoItem label="هاتف إضافي" value={customer.phone2} isMono />
                             <InfoItem label="العنوان" value={customer.address} className="col-span-full"/>
@@ -1124,7 +1060,6 @@ const Step1_CustomerAndProducts = ({ customer, onSelectCustomer, onEditCustomer,
                 )}
             </div>
 
-            {/* Invoice Date Section */}
             {customer && (
                  <div className="border-b pb-6 mb-8">
                     <div className="flex items-center justify-between gap-4 py-2">
@@ -1141,7 +1076,6 @@ const Step1_CustomerAndProducts = ({ customer, onSelectCustomer, onEditCustomer,
                  </div>
             )}
 
-            {/* Products Section */}
             <div className="space-y-6">
                 <div className="text-center">
                     <Button onClick={onOpenVehicleSelector} variant="outline" className="h-12 w-full border-dashed bg-white shadow-sm hover:bg-slate-50" disabled={!customer}>
@@ -1165,10 +1099,10 @@ const Step1_CustomerAndProducts = ({ customer, onSelectCustomer, onEditCustomer,
                                         </div>
                                     </div>
                                     <div className="flex flex-col items-end flex-shrink-0">
-                                        <Button 
-                                            size="icon" 
-                                            variant="ghost" 
-                                            className="h-8 w-8 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 self-end -mt-2 -mr-2" 
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="h-8 w-8 rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 self-end -mt-2 -mr-2"
                                             onClick={(e) => { e.stopPropagation(); handleRemoveItem(item.id); }}>
                                             <X className="h-5 w-5" />
                                         </Button>
@@ -1191,11 +1125,9 @@ const Step1_CustomerAndProducts = ({ customer, onSelectCustomer, onEditCustomer,
             </div>
         </motion.div>
     );
-}
-
+};
 
 const Step2_Payments = ({ items, payments, setPayments, onAddCashClick, onAddOtherPaymentClick }) => {
-
     const handleRemovePayment = (paymentId) => {
         setPayments(prev => prev.filter(p => p.id !== paymentId));
     };
@@ -1203,7 +1135,7 @@ const Step2_Payments = ({ items, payments, setPayments, onAddCashClick, onAddOth
     const totalInvoiceAmount = items.reduce((acc, item) => acc + (Number(item.selling_price) || 0), 0);
     const totalPaid = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
     const remainingAmount = totalInvoiceAmount - totalPaid;
-    
+
     const getPaymentTypeStyle = (type) => {
         switch (type) {
             case 'cash':
@@ -1214,7 +1146,7 @@ const Step2_Payments = ({ items, payments, setPayments, onAddCashClick, onAddOth
                 return "text-slate-800 bg-slate-100/80";
         }
     }
-    
+
     const getPaymentTypeName = (type) => {
         switch (type) {
             case 'cash':
@@ -1229,7 +1161,6 @@ const Step2_Payments = ({ items, payments, setPayments, onAddCashClick, onAddOth
     return (
         <motion.div key="step2" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
-                
                 <div className="p-4 flex justify-between items-center bg-slate-50/70 border-b-2 border-slate-200/60">
                     <span className="font-bold text-slate-700 text-lg">الإجمالي المطلوب</span>
                     <span className="font-mono font-bold text-3xl text-slate-900 tracking-tight">{totalInvoiceAmount.toLocaleString()}</span>
@@ -1298,7 +1229,7 @@ const Step3_DeferredPayment = ({ remainingAmount, note, onNoteChange }) => (
         </div>
         <div className="space-y-1.5 pt-6 border-t border-slate-200">
             <Label htmlFor="payment_note" className="font-semibold px-1 text-slate-800">ملاحظات السداد (اختياري)</Label>
-            <Textarea 
+            <Textarea
                 id="payment_note"
                 name="payment_note"
                 value={note}
@@ -1318,7 +1249,6 @@ const Step4_Review = ({ customer, items, payments, invoiceDate }) => {
     return (
         <motion.div key="step4-review" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
             <div className="bg-white rounded-lg border shadow-sm p-6 space-y-8" id="invoice-preview">
-                {/* Header */}
                 <div className="flex justify-between items-start pb-6 border-b">
                     <div>
                         <h1 className="text-3xl font-bold text-slate-800">فاتورة بيع</h1>
@@ -1332,7 +1262,6 @@ const Step4_Review = ({ customer, items, payments, invoiceDate }) => {
                     </div>
                 </div>
 
-                {/* Customer Details */}
                 <div className="py-6 border-b">
                     <h3 className="text-lg font-semibold text-slate-600 mb-3">بيانات العميل</h3>
                     <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
@@ -1342,7 +1271,6 @@ const Step4_Review = ({ customer, items, payments, invoiceDate }) => {
                     </div>
                 </div>
 
-                {/* Items Table */}
                 <div className="py-6 border-b">
                     <table className="w-full text-right">
                         <thead className="border-b">
@@ -1364,10 +1292,8 @@ const Step4_Review = ({ customer, items, payments, invoiceDate }) => {
                         </tbody>
                     </table>
                 </div>
-                
-                {/* Totals and Payments */}
+
                 <div className="flex justify-between pt-6">
-                    {/* Payments */}
                     <div className="w-1/2 pr-4">
                          <h3 className="text-lg font-semibold text-slate-600 mb-3">المدفوعات</h3>
                          <div className="space-y-2">
@@ -1380,7 +1306,6 @@ const Step4_Review = ({ customer, items, payments, invoiceDate }) => {
                              {payments.length === 0 && <p className="text-sm text-slate-400">لم تسجل دفعات.</p>}
                          </div>
                     </div>
-                    {/* Summary */}
                     <div className="w-1/2 pl-4 space-y-3">
                         <div className="flex justify-between items-center text-base">
                             <span className="font-semibold text-slate-600">المجموع</span>
@@ -1398,7 +1323,6 @@ const Step4_Review = ({ customer, items, payments, invoiceDate }) => {
                     </div>
                 </div>
 
-                {/* Footer */}
                 <div className="pt-8 text-center text-xs text-slate-400">
                     <p>شكرًا لتعاملكم معنا!</p>
                 </div>
@@ -1407,15 +1331,12 @@ const Step4_Review = ({ customer, items, payments, invoiceDate }) => {
     );
 };
 
-
-
-// --- Main Component: CreateInvoiceSheet ---
 const CreateInvoiceSheet = ({ isOpen, onClose }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [customer, setCustomer] = useState(null);
   const [customerToEdit, setCustomerToEdit] = useState(null);
   const [isCustomerSelectorOpen, setCustomerSelectorOpen] = useState(false);
-  const [isAddNewCustomerOpen, setAddNewCustomerOpen] = useState(false);
+  const [isCustomerFormOpen, setCustomerFormOpen] = useState(false);
   const [newlyAddedCustomerId, setNewlyAddedCustomerId] = useState(null);
   const [items, setItems] = useState([]);
   const [isVehicleSelectorOpen, setVehicleSelectorOpen] = useState(false);
@@ -1429,10 +1350,10 @@ const CreateInvoiceSheet = ({ isOpen, onClose }) => {
   const [deferredPaymentNote, setDeferredPaymentNote] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(new Date());
   const [isDatePickerOpen, setDatePickerOpen] = useState(false);
-  
-  const { loading, createSaleInvoice, fetchAllCustomerPaymentsForSelection ,  createCustomerPayment} = useAccountMoves();
 
-  const totalSteps = 4; // 1: Cust & Prod, 2: Payments, 3: Deferred?, 4: Review
+  const { loading, createSaleInvoice, fetchAllCustomerPaymentsForSelection, createCustomerPayment } = useAccountMoves();
+
+  const totalSteps = 4;
 
   const totalInvoiceAmount = items.reduce((acc, item) => acc + (Number(item.selling_price) || 0), 0);
   const totalPaid = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
@@ -1446,7 +1367,7 @@ const CreateInvoiceSheet = ({ isOpen, onClose }) => {
       }
       if (currentStep < totalSteps) {
           setCurrentStep(s => s + 1);
-      } else { // At step 4 (Final Action)
+      } else {
           const invoiceData = {
               customer_id: customer.id,
               invoice_date: invoiceDate,
@@ -1454,19 +1375,17 @@ const CreateInvoiceSheet = ({ isOpen, onClose }) => {
               notes: deferredPaymentNote
           };
           const invoiceLines = items.map(item => ({
-              product_id: item.id, // This is the vehicle_id
+              product_id: item.id,
               selling_price: Number(item.selling_price)
           }));
 
           const { success } = await createSaleInvoice(invoiceData, invoiceLines, payments);
           if (success) {
              if (!isDeferred) {
-                // If fully paid, trigger print after a short delay
                 setTimeout(() => window.print(), 500);
              }
-             onClose(); // Close the main sheet on success
+             onClose();
           }
-          // Errors are handled with toasts within the hook
       }
   };
 
@@ -1481,23 +1400,31 @@ const CreateInvoiceSheet = ({ isOpen, onClose }) => {
           onClose();
       }
   };
-  
+
   const handleCustomerConfirmed = (confirmedCustomer) => {
       setCustomer(confirmedCustomer);
       setCustomerToEdit(null);
       setCustomerSelectorOpen(false);
   };
-  const handleAddNewCustomer = () => { setCustomerSelectorOpen(false); setAddNewCustomerOpen(true); };
-  const handleCustomerCreated = (newCustomer) => { 
-      setAddNewCustomerOpen(false); 
-      setCustomerSelectorOpen(true);
-      if(newCustomer) setNewlyAddedCustomerId(newCustomer.id); 
+
+  const handleAddNewCustomer = () => {
+      setCustomerToEdit(null);
+      setCustomerFormOpen(true);
   };
 
-  const handleEditCustomer = () => {
-      setCustomerToEdit(customer);
-      setCustomerSelectorOpen(true);
-  }
+  const handleEditCustomer = (customerToEdit) => {
+      setCustomerToEdit(customerToEdit);
+      setCustomerFormOpen(true);
+  };
+
+  const handleCustomerFormSave = (savedCustomer) => {
+      if (customer && savedCustomer.id === customer.id) {
+          setCustomer(savedCustomer);
+      }
+      setCustomerToEdit(null);
+      setCustomerFormOpen(false);
+      setNewlyAddedCustomerId(savedCustomer.id);
+  };
 
   const handleOpenVehicleEditor = (item) => {
     setItemToEdit(item);
@@ -1520,7 +1447,7 @@ const CreateInvoiceSheet = ({ isOpen, onClose }) => {
       setPayments(prev => [...prev, { id: Date.now(), type: 'cash', ...newPayment }]);
       setCashSheetOpen(false);
   };
-  
+
   const handleSaveFinancingPayment = (newPayment) => {
     setPayments(prev => [...prev, { id: Date.now(), ...newPayment }]);
     setFinancingSheetOpen(false);
@@ -1529,22 +1456,25 @@ const CreateInvoiceSheet = ({ isOpen, onClose }) => {
 
   const handleSaveNewFinancingAndReopen = () => {
       setAddCustomFinancingOpen(false);
-      setFinancingSheetOpen(true);
-  }
+  };
 
-  const handleAddNewVehicle = () => { setVehicleSelectorOpen(false); setAddNewVehicleOpen(true); };
-  const handleVehicleCreated = (newVehicle) => { 
-      setAddNewVehicleOpen(false); 
-      setVehicleSelectorOpen(true); 
+  const handleAddNewVehicle = () => {
+      setVehicleSelectorOpen(false);
+      setAddNewVehicleOpen(true);
+  };
+
+  const handleVehicleCreated = () => {
+      setAddNewVehicleOpen(false);
+      setVehicleSelectorOpen(true);
   };
 
   useEffect(() => {
     if (isOpen) {
-        if (!isCustomerSelectorOpen && !customer) {
+        if (!isCustomerSelectorOpen && !isCustomerFormOpen && !customer) {
             setCustomerSelectorOpen(true);
         }
     } else {
-        setTimeout(() => { 
+        setTimeout(() => {
             setCurrentStep(1);
             setCustomer(null);
             setCustomerToEdit(null);
@@ -1553,7 +1483,7 @@ const CreateInvoiceSheet = ({ isOpen, onClose }) => {
             setDeferredPaymentNote('');
             setInvoiceDate(new Date());
             setCustomerSelectorOpen(false);
-            setAddNewCustomerOpen(false);
+            setCustomerFormOpen(false);
             setVehicleSelectorOpen(false);
             setCashSheetOpen(false);
             setFinancingSheetOpen(false);
@@ -1562,35 +1492,38 @@ const CreateInvoiceSheet = ({ isOpen, onClose }) => {
             setItemToEdit(null);
         }, 300);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
-  
+  }, [isOpen, isCustomerSelectorOpen, isCustomerFormOpen, customer]);
+
   const isFinalStep = currentStep === totalSteps;
 
   return (
     <>
       <Toaster />
+
       <AnimatePresence>{isOpen && <motion.div key="inv-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 z-40" />}</AnimatePresence>
+
       <AnimatePresence>{isOpen && (
         <motion.div initial={{ y: '100%' }} animate={{ y: '0%' }} exit={{ y: '100%' }} transition={{ type: 'tween', duration: 0.3, ease: [0.25, 1, 0.5, 1] }} className="fixed inset-0 h-screen bg-white z-50 flex flex-col" dir="rtl">
           <header className="flex-shrink-0 bg-white/80 backdrop-blur-sm z-10 border-b">
-            <div className="w-full mx-auto px-4 sm:px-6"><div className="flex justify-between items-center h-16">
+            <div className="w-full mx-auto px-4 sm:px-6">
+              <div className="flex justify-between items-center h-16">
                 <Button onClick={handleBack} variant="ghost" className="w-20 justify-start">{currentStep > 1 ? "السابق" : "إغلاق"}</Button>
                 <h2 className="text-lg font-bold">فاتورة جديدة ({currentStep}/{totalSteps})</h2>
                 <Button onClick={handleNext} disabled={!customer || items.length === 0 || loading} className="bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-full px-5 w-auto justify-center">
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> :
                      isFinalStep ? (isDeferred ? "حفظ الفاتورة" : <><Printer className="w-4 h-4 ml-2" /><span>طباعة</span></>) : (currentStep === 3 ? "متابعة للمراجعة" : "التالي")}
                 </Button>
-            </div></div>
+              </div>
+            </div>
           </header>
+
           <main className="flex-grow overflow-y-auto p-4 sm:p-6 bg-white">
             <div className="w-full max-w-3xl mx-auto pb-10">
                 <AnimatePresence mode="wait">
                     {currentStep === 1 && (
-                        <Step1_CustomerAndProducts 
+                        <Step1_CustomerAndProducts
                             customer={customer}
-                            onSelectCustomer={() => { setCustomerToEdit(null); setCustomerSelectorOpen(true); }}
-                            onEditCustomer={handleEditCustomer}
+                            onSelectCustomer={() => setCustomerSelectorOpen(true)}
                             items={items}
                             setItems={setItems}
                             onOpenVehicleSelector={() => { setItemToEdit(null); setVehicleSelectorOpen(true); }}
@@ -1600,17 +1533,17 @@ const CreateInvoiceSheet = ({ isOpen, onClose }) => {
                         />
                     )}
                     {currentStep === 2 && <Step2_Payments items={items} payments={payments} setPayments={setPayments} onAddCashClick={() => setCashSheetOpen(true)} onAddOtherPaymentClick={() => setFinancingSheetOpen(true)} />}
-                    {currentStep === 3 && 
-                        <Step3_DeferredPayment 
+                    {currentStep === 3 &&
+                        <Step3_DeferredPayment
                             remainingAmount={remainingAmount}
                             note={deferredPaymentNote}
                             onNoteChange={(e) => setDeferredPaymentNote(e.target.value)}
                         />
                     }
-                    {currentStep === 4 && 
-                        <Step4_Review 
-                            customer={customer} 
-                            items={items} 
+                    {currentStep === 4 &&
+                        <Step4_Review
+                            customer={customer}
+                            items={items}
                             payments={payments}
                             invoiceDate={invoiceDate}
                         />
@@ -1618,62 +1551,79 @@ const CreateInvoiceSheet = ({ isOpen, onClose }) => {
                 </AnimatePresence>
             </div>
           </main>
-        </motion.div> )}</AnimatePresence>
-      
-      {/* --- All the sheets --- */}
-      <CustomerSelectionSheet 
-        isOpen={isCustomerSelectorOpen} 
-        onClose={() => setCustomerSelectorOpen(false)} 
-        onCustomerConfirmed={handleCustomerConfirmed} 
+        </motion.div>
+      )}</AnimatePresence>
+
+      <CustomerSelectionSheet
+        isOpen={isCustomerSelectorOpen}
+        onClose={() => setCustomerSelectorOpen(false)}
+        onCustomerConfirmed={handleCustomerConfirmed}
         onAddNew={handleAddNewCustomer}
+        onEdit={handleEditCustomer}
         newlyAddedCustomerId={newlyAddedCustomerId}
-        onClearHighlight={() => setNewlyAddedCustomerId(null)} 
-        onEditCustomer={customerToEdit}
+        onClearHighlight={() => setNewlyAddedCustomerId(null)}
       />
-      <AddNewCustomerSheet isOpen={isAddNewCustomerOpen} onClose={() => { setAddNewCustomerOpen(false); setCustomerSelectorOpen(true); }} onCustomerCreated={handleCustomerCreated} />
-      <VehicleSelectionSheet 
-        isOpen={isVehicleSelectorOpen} 
-        onClose={() => { setVehicleSelectorOpen(false); setItemToEdit(null); }} 
-        onVehicleSelect={handleVehicleSelected} 
+
+      <PartnerFormSheet
+        open={isCustomerFormOpen}
+        onClose={() => {
+          setCustomerFormOpen(false);
+          setCustomerToEdit(null);
+        }}
+        onSuccess={handleCustomerFormSave}
+        partner={customerToEdit}
+        mode={customerToEdit ? 'edit' : 'create'}
+        defaultType="customer"
+      />
+
+      <VehicleSelectionSheet
+        isOpen={isVehicleSelectorOpen}
+        onClose={() => { setVehicleSelectorOpen(false); setItemToEdit(null); }}
+        onVehicleSelect={handleVehicleSelected}
         onAddNew={handleAddNewVehicle}
         itemToEdit={itemToEdit}
         itemsInCart={items}
       />
-      <AddNewVehicleSheet 
-        isOpen={isAddNewVehicleOpen} 
-        onClose={() => { setAddNewVehicleOpen(false); setVehicleSelectorOpen(true); }} 
-        onVehicleCreated={handleVehicleCreated} 
+
+      <AddNewVehicleSheet
+        isOpen={isAddNewVehicleOpen}
+        onClose={() => { setAddNewVehicleOpen(false); setVehicleSelectorOpen(true); }}
+        onVehicleCreated={handleVehicleCreated}
       />
-      <AddCashPaymentSheet 
+
+      <AddCashPaymentSheet
         isOpen={isCashSheetOpen}
         onClose={() => setCashSheetOpen(false)}
         onSave={handleSaveCashPayment}
       />
+
       <FinancingSheet
         isOpen={isFinancingSheetOpen}
         onClose={() => setFinancingSheetOpen(false)}
         onSave={handleSaveFinancingPayment}
-        onAddNew={() => { setFinancingSheetOpen(false); setAddCustomFinancingOpen(true); }}
+        onAddNew={() => { setAddCustomFinancingOpen(true); }}
         customer={customer}
         fetchAllCustomerPaymentsForSelection={fetchAllCustomerPaymentsForSelection}
         loading={loading}
       />
+
       <AddCustomFinancingSheet
         isOpen={isAddCustomFinancingOpen}
-        onClose={() => { setAddCustomFinancingOpen(false); setFinancingSheetOpen(true); }}
+        onClose={() => { setAddCustomFinancingOpen(false); }}
         onSave={handleSaveNewFinancingAndReopen}
         customer={customer}
         createCustomerPayment={createCustomerPayment}
         loading={loading}
       />
-      <DatePickerSheet 
+
+      <DatePickerSheet
         isOpen={isDatePickerOpen}
         onClose={() => setDatePickerOpen(false)}
         value={invoiceDate}
         onChange={setInvoiceDate}
       />
 
-        <style jsx global>{`
+      <style jsx global>{`
             @media print {
                 body > *:not(#invoice-preview) {
                     display: none;

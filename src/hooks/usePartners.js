@@ -1,41 +1,149 @@
 import { useState, useCallback } from 'react';
-import { supabase } from '@/lib/customSupabaseClient';
-import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '../lib/customSupabaseClient';
+import { useToast } from '../components/ui/use-toast';
+
+const BUCKET_NAME = 'account-id-cards';
 
 export const usePartners = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const fetchPartners = useCallback(async (filters = {}) => {
+  const uploadIdCard = async (partnerId, file, type) => {
+    if (!file || !(file instanceof File)) {
+      return { url: null, error: null };
+    }
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${partnerId}-${type}-${Date.now()}.${fileExt}`;
+    const filePath = `public/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true,
+      });
+
+    if (uploadError) {
+      console.error(`Error uploading ${type} card:`, uploadError);
+      return { url: null, error: uploadError };
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(filePath);
+
+    if (!publicUrlData.publicUrl) {
+         console.error('Error getting public URL for ' + filePath);
+         return { url: null, error: { message: 'Error getting public URL' }};
+    }
+
+    return { url: publicUrlData.publicUrl, error: null };
+  };
+  
+  const addPartner = useCallback(async (partnerData) => {
     setLoading(true);
     try {
-      // Select all columns including id_card_image
-      let query = supabase
+      const { id_card_front, id_card_back, ...restData } = partnerData;
+      
+      // Remove any extraneous properties before insert
+      const { id, created_at, ...insertData } = restData;
+
+      const { data: newPartner, error: insertError } = await supabase
         .from('partners')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .insert(insertData)
+        .select()
+        .single();
 
-      if (filters.search) {
-        query = query.or(`name.ilike.%${filters.search}%,nickname.ilike.%${filters.search}%,phone1.ilike.%${filters.search}%,national_id.ilike.%${filters.search}%`);
+      if (insertError) throw insertError;
+
+      let frontUrl = null;
+      let backUrl = null;
+      let hasUploadError = false;
+
+      if (id_card_front instanceof File) {
+        const { url, error } = await uploadIdCard(newPartner.id, id_card_front, 'front');
+        if (error) hasUploadError = true;
+        frontUrl = url;
+      }
+      if (id_card_back instanceof File) {
+        const { url, error } = await uploadIdCard(newPartner.id, id_card_back, 'back');
+        if (error) hasUploadError = true;
+        backUrl = url;
+      }
+      
+      const imageUpdates = {};
+      if (frontUrl) imageUpdates.id_card_front = frontUrl;
+      if (backUrl) imageUpdates.id_card_back = backUrl;
+
+      if (Object.keys(imageUpdates).length > 0) {
+        const { data: updatedPartner, error: updateError } = await supabase
+          .from('partners')
+          .update(imageUpdates)
+          .eq('id', newPartner.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+        
+        toast({ title: 'نجاح', description: 'تم إنشاء الشريك بنجاح.' });
+        if (hasUploadError) {
+          toast({ title: 'تنبيه', description: 'تم إنشاء الشريك ولكن فشل تحميل صورة واحدة أو أكثر من صور البطاقة.', variant: 'destructive' });
+        }
+        return updatedPartner;
+      }
+      
+      toast({ title: 'نجاح', description: 'تم إنشاء الشريك بنجاح.' });
+      return newPartner;
+
+    } catch (error) {
+      console.error('Error adding partner:', error);
+      toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  const updatePartner = useCallback(async (id, partnerData) => {
+    setLoading(true);
+    try {
+      const { id_card_front, id_card_back, ...restData } = partnerData;
+      
+      // Exclude fields that should not be in the update payload
+      const { id: partnerId, created_at, ...updateData } = restData;
+      
+      const updates = { ...updateData };
+      let hasUploadError = false;
+
+      if (id_card_front instanceof File) {
+        const { url, error } = await uploadIdCard(id, id_card_front, 'front');
+        if (error) hasUploadError = true; else updates.id_card_front = url;
+      }
+      if (id_card_back instanceof File) {
+         const { url, error } = await uploadIdCard(id, id_card_back, 'back');
+        if (error) hasUploadError = true; else updates.id_card_back = url;
       }
 
-      if (filters.account_type) {
-        query = query.eq('account_type', filters.account_type);
-      }
-
-      const { data, error } = await query;
+      const { data: updatedPartner, error } = await supabase
+        .from('partners')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
 
       if (error) throw error;
-      return { data, error: null };
+      
+      toast({ title: 'نجاح', description: 'تم تحديث بيانات الشريك بنجاح.' });
+      if (hasUploadError) {
+        toast({ title: 'تنبيه', description: 'تم تحديث الشريك ولكن فشل تحميل صورة واحدة أو أكثر من صور البطاقة.', variant: 'destructive' });
+      }
+
+      return updatedPartner;
     } catch (error) {
-      console.error('Error fetching partners:', error);
-      toast({
-        title: "خطأ",
-        description: "فشل تحميل الشركاء",
-        variant: "destructive"
-      });
-      return { data: null, error };
+      console.error('Error updating partner:', error);
+      toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
+      return null;
     } finally {
       setLoading(false);
     }
@@ -49,174 +157,35 @@ export const usePartners = () => {
         .select('*')
         .eq('id', id)
         .single();
-
       if (error) throw error;
-      return { data, error: null };
+      return data;
     } catch (error) {
-      console.error('Error fetching partner details:', error);
-      toast({
-        title: "خطأ",
-        description: "فشل تحميل بيانات الشريك",
-        variant: "destructive"
-      });
-      return { data: null, error };
+      console.error('Error fetching partner:', error);
+      toast({ title: 'خطأ', description: 'فشل في جلب بيانات الشريك.', variant: 'destructive' });
+      return null;
     } finally {
       setLoading(false);
     }
   }, [toast]);
 
-  const addPartner = useCallback(async (partnerData) => {
+  const searchPartners = useCallback(async ({ query }) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('partners')
-        .insert([partnerData])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      toast({
-        title: "تم بنجاح",
-        description: "تم إضافة الشريك بنجاح"
-      });
-
-      return { data, error: null };
-    } catch (error) {
-      console.error('Error adding partner:', error);
-      toast({
-        title: "خطأ",
-        description: "فشل إضافة الشريك",
-        variant: "destructive"
-      });
-      return { data: null, error };
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
-
-  const updatePartner = useCallback(async (id, partnerData) => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('partners')
-        .update(partnerData)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      toast({
-        title: "تم بنجاح",
-        description: "تم تحديث الشريك بنجاح"
-      });
-
-      return { data, error: null };
-    } catch (error) {
-      console.error('Error updating partner:', error);
-      toast({
-        title: "خطأ",
-        description: "فشل تحديث الشريك",
-        variant: "destructive"
-      });
-      return { data: null, error };
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
-
-  const deletePartner = useCallback(async (id, hardDelete = false) => {
-    setLoading(true);
-    try {
-      if (hardDelete) {
-        const { error } = await supabase
-          .from('partners')
-          .delete()
-          .eq('id', id);
-
+        let queryBuilder = supabase.from('partners').select('*');
+        if (query) {
+            queryBuilder = queryBuilder.or(`name.ilike.%${query}%,nickname.ilike.%${query}%,phone1.ilike.%${query}%,national_id.ilike.%${query}%`);
+        }
+        const { data, error } = await queryBuilder;
         if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('partners')
-          .update({ is_active: false })
-          .eq('id', id);
-
-        if (error) throw error;
-      }
-
-      toast({
-        title: "تم بنجاح",
-        description: "تم حذف الشريك بنجاح"
-      });
-
-      return { error: null };
+        return data;
     } catch (error) {
-      console.error('Error deleting partner:', error);
-      toast({
-        title: "خطأ",
-        description: "فشل حذف الشريك",
-        variant: "destructive"
-      });
-      return { error };
+        console.error('Error searching partners:', error);
+        toast({ title: 'خطأ', description: 'فشل البحث عن الشركاء.', variant: 'destructive' });
+        return [];
     } finally {
       setLoading(false);
     }
   }, [toast]);
 
-  const getMissingFields = useCallback((partner) => {
-    const requiredFields = [
-      { key: 'name', label: 'الاسم' },
-      { key: 'phone1', label: 'رقم هاتف 1' },
-      { key: 'account_type', label: 'نوع الحساب' }
-    ];
-
-    const missing = requiredFields.filter(field => !partner[field.key] || partner[field.key].trim() === '');
-    return missing;
-  }, []);
-
-  const uploadIdCardImage = useCallback(async (file, partnerId) => {
-    setLoading(true);
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${partnerId}-${Date.now()}.${fileExt}`;
-      const filePath = `${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('partner-id-cards')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true
-        });
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('partner-id-cards')
-        .getPublicUrl(filePath);
-
-      return { url: publicUrl, error: null };
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      toast({
-        title: "خطأ",
-        description: "فشل رفع الصورة",
-        variant: "destructive"
-      });
-      return { url: null, error };
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
-
-  return {
-    loading,
-    fetchPartners,
-    getPartnerById,
-    addPartner,
-    updatePartner,
-    deletePartner,
-    getMissingFields,
-    uploadIdCardImage
-  };
+  return { loading, addPartner, updatePartner, getPartnerById, searchPartners };
 };
